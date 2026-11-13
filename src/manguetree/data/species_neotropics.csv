@@ -1,0 +1,11 @@
+code,scientific_name,genus,aliases,regions,true_mangrove,source
+Rm,Rhizophora mangle,Rhizophora,rm|r mangle|mangue vermelho|mangle rojo,BR_S_SE|BR_N_NE|CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,"Tomlinson 2016; Spalding et al. 2010; Polidoro et al. 2010; Ximenes et al. 2016 (Brazil, south to Santa Catarina)"
+Rr,Rhizophora racemosa,Rhizophora,rr|r racemosa,BR_N_NE|CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,"Tomlinson 2016; Spalding et al. 2010; Polidoro et al. 2010; Ximenes et al. 2016 (Brazil only north of about 2.6 S, Maranhao)"
+Rx,Rhizophora x harrisonii,Rhizophora,r harrisonii|r x harrisonii|rhizophora harrisonii,BR_N_NE|CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,Tomlinson 2016; Spalding et al. 2010; Ximenes et al. 2016 (hybrid of R. mangle and R. racemosa in most treatments; Caribbean and Pacific extent to be confirmed)
+Ag,Avicennia germinans,Avicennia,ag|a germinans,BR_S_SE|BR_N_NE|CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,"Tomlinson 2016; Spalding et al. 2010; Polidoro et al. 2010; Ximenes et al. 2016 (Brazil, south to Rio de Janeiro)"
+As,Avicennia schaueriana,Avicennia,as|a schaueriana,BR_S_SE|BR_N_NE|CARIBBEAN_ATLANTIC,true,"Tomlinson 2016; Spalding et al. 2010; Schaeffer-Novelli et al. 1990; Ximenes et al. 2016 (Brazil, south to Laguna, Santa Catarina)"
+Ab,Avicennia bicolor,Avicennia,ab|a bicolor,EASTERN_PACIFIC,true,Tomlinson 2016; Spalding et al. 2010
+Lg,Laguncularia racemosa,Laguncularia,lr|l racemosa|mangue branco|mangle blanco,BR_S_SE|BR_N_NE|CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,Tomlinson 2016; Spalding et al. 2010; Polidoro et al. 2010; Ximenes et al. 2016
+Ce,Conocarpus erectus,Conocarpus,ce|c erectus,BR_S_SE|BR_N_NE|CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,false,Tomlinson 2016; Spalding et al. 2010; Ximenes et al. 2016
+Pr,Pelliciera rhizophorae,Pelliciera,pr|p rhizophorae,CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,Tomlinson 2016; Spalding et al. 2010; Polidoro et al. 2010; Duke 2020 (sensu stricto)
+Pb,Pelliciera benthamii,Pelliciera,pb|p benthamii,CARIBBEAN_ATLANTIC|EASTERN_PACIFIC,true,Duke 2020 (split from P. rhizophorae)

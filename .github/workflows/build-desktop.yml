@@ -1,0 +1,64 @@
+name: Build MangueTREE (desktop)
+
+# Builds the Windows and macOS applications automatically.
+# Run it manually from the "Actions" tab (Run workflow) or by pushing a tag such as "v1.0.0".
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+          pip install --no-deps .
+      - name: Package (PyInstaller)
+        run: pyinstaller --noconfirm MangueTREE.spec
+      - name: Compress app
+        run: Compress-Archive -Path dist/MangueTREE/* -DestinationPath MangueTREE-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MangueTREE-Windows
+          path: MangueTREE-Windows.zip
+      - name: Attach to the release (on tags)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MangueTREE-Windows.zip
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+          pip install --no-deps .
+      - name: Package (PyInstaller)
+        run: pyinstaller --noconfirm MangueTREE.spec
+      - name: Compress app (keeps the .app)
+        run: ditto -c -k --keepParent "dist/MangueTREE.app" MangueTREE-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MangueTREE-macOS
+          path: MangueTREE-macOS.zip
+      - name: Attach to the release (on tags)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MangueTREE-macOS.zip

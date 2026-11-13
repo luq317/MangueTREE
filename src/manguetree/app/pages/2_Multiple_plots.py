@@ -1,0 +1,274 @@
+# -*- coding: utf-8 -*-
+"""
+Multiple plots analysis (MangueTREE): SPATIAL comparison between plots (one sheet per
+plot). For change over the years use the Temporal page. Results in session_state use
+language independent keys and internal column names; text comes from the catalogs.
+"""
+import re
+import io
+import pandas as pd
+import streamlit as st
+
+from manguetree import calc as mc
+from manguetree import charts as ui
+from manguetree import io as mio
+from manguetree import i18n
+from manguetree.i18n import t
+
+st.set_page_config(layout="wide", page_title=t("multi.page_title"), page_icon="📈")
+LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
+ui.topo(t("multi.title"), t("multi.subtitle"))
+st.markdown(t("multi.intro"))
+st.caption(t("multi.see_temporal"))
+
+st.sidebar.header(t("sidebar.settings"))
+uploaded = st.sidebar.file_uploader(t("sidebar.excel_file"), type=["xlsx"], key="upload_multi")
+RESOLVER = ui.sidebar_species_settings(st.sidebar)
+
+if not uploaded:
+    st.info(t("multi.upload_prompt"))
+    st.stop()
+
+try:
+    abas = ui.sheet_names(uploaded)
+except Exception as e:
+    st.error(t("sidebar.excel_error", error=str(e)))
+    st.stop()
+
+# Results belong to the file they were computed from: a new upload clears them.
+_fid = getattr(uploaded, "file_id", uploaded.name)
+if st.session_state.get("multi_file") != _fid:
+    for _k in ('multi_resultados', 'multi_sig', 'multi_issues', 'multi_ignoradas', 'pdf_multi', 'pdf_sig_multi'):
+        st.session_state.pop(_k, None)
+    st.session_state["multi_file"] = _fid
+
+# --- Fora do formulário: a paleta re-estiliza ao vivo ---
+st.sidebar.subheader(t("sidebar.style_sub"))
+paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_multi",
+                                    format_func=lambda c: ui.palette_label(c, LANG))
+show_seal = ui.seal_checkbox(st.sidebar)
+estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": 14, "tamanho_eixos": 11,
+           "seal": show_seal}
+
+# --- Formulário: preencha tudo e clique UMA vez (sem apertar Enter em cada campo) ---
+with st.sidebar.form("cfg_multi"):
+    st.caption(t("sidebar.form_hint"))
+    cell_area = st.text_input(t("sidebar.area_cell_sheets"), "", key="cell_multi")
+    area_padrao = st.number_input(t("sidebar.default_area"), min_value=1.0,
+                                  value=100.0, step=10.0, key="area_multi")
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        c1 = st.number_input(t("sidebar.dbh_class1"), value=2.5, step=0.5, key="cut1_multi")
+    with cc2:
+        c2 = st.number_input(t("sidebar.dbh_class2"), value=10.0, step=1.0, key="cut2_multi")
+    selecionadas = st.multiselect(t("multi.plots_to_analyse"), options=abas, default=abas,
+                                  key=f"sheets_multi_{uploaded.name}_{uploaded.size}")
+    submitted = st.form_submit_button(t("multi.run"), type="primary")
+limites = tuple(sorted([c1, c2]))
+if limites[0] >= limites[1]:
+    st.sidebar.error(t("sidebar.cutoffs_equal"))
+    st.stop()
+
+# Processa SÓ ao clicar em Executar (ou quando região, tabela de espécies ou a escolha
+# para troncos sem condição mudam); guarda em session_state para que os seletores
+# dos gráficos atualizem ao vivo sem precisar reexecutar.
+cond_faltante = st.session_state.get("mc_multi", "exclude")
+cfg_sig = (ui.settings_signature(), cond_faltante)
+if submitted or (st.session_state.get("multi_resultados")
+                 and st.session_state.get("multi_sig") != cfg_sig):
+    resultados = []
+    ignoradas = {}
+    problemas = {}
+    with st.spinner(t("multi.processing", n=len(selecionadas))):
+        for aba in selecionadas:
+            df, area = mio.load_excel_sheet(uploaded, aba, cell_area, area_padrao)
+            if df is None or not mio.has_required_columns(df):
+                ignoradas[aba] = "no_columns"
+                continue
+            if df.empty:
+                ignoradas[aba] = "no_data"
+                continue
+            res = mc.analyze(df, area, RESOLVER, dbh_limits=limites, plot_name=aba,
+                             missing_condition=cond_faltante)
+            if res["summary"]["n_stems"] == 0:
+                ignoradas[aba] = "no_stems"
+                continue
+            resultados.append(res)
+            problemas[aba] = res["issues"]
+    st.session_state["multi_sig"] = cfg_sig
+    st.session_state["multi_issues"] = problemas
+    st.session_state["multi_resultados"] = resultados
+    st.session_state["multi_ignoradas"] = ignoradas
+
+resultados = st.session_state.get("multi_resultados")
+if not resultados:
+    st.info(t("multi.select_prompt"))
+    st.stop()
+ignoradas = st.session_state.get("multi_ignoradas", {})
+
+st.success(t("multi.processed", n=len(resultados)))
+if ignoradas:
+    st.caption(t("sheets.ignored") + " " + ", ".join(
+        f"{a} ({t('sheets.reason.' + m)})" for a, m in ignoradas.items()))
+problemas = st.session_state.get("multi_issues", {})
+SHEET = t("labels.sheet")
+ui.validation_panel(problemas, SHEET, key="mc_multi", lang=LANG)
+df_problemas = ui.issues_frame_by_unit(problemas, SHEET, LANG)
+
+# ---------------- TABELA COMPARATIVA ----------------
+linhas = []
+for res in resultados:
+    r = res["summary"]
+    linhas.append({
+        "plot": res["plot_name"],
+        "plot_area_m2": r["plot_area_m2"],
+        "n_species_live": r["n_species_live"],
+        "density_live_ha": r["density_live_ha"],
+        "ba_live_ha": r["ba_live_ha"],
+        "mean_dbh_cm": r["mean_dbh_cm"],
+        "height_mean_m": r["height_mean_m"],
+        "canopy_height_m": r["canopy_height_m"],
+        "complexity_2_5": res["complexity"]["dbh_gt_2.5"]["ci"],
+        "complexity_10": res["complexity"]["dbh_gt_10"]["ci"],
+        "mortality_stems_pct": r["mortality_stems_pct"],
+    })
+df_param = ui.integer_counts(pd.DataFrame(linhas))      # internal column names; shown through ui.for_display
+
+tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.ivi"),
+                t("multi.tab.species"), t("multi.tab.map"), t("multi.tab.export")])
+
+with tabs[0]:
+    st.subheader(t("multi.params_by_plot"))
+    _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
+    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
+    st.divider()
+    metrica = st.selectbox(t("multi.compare_by"), ui.metric_columns(df_param),
+                           key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
+    st.plotly_chart(ui.fig_comparativo_barras(df_param, estilos, metrica,
+                                              ui.label(metrica, LANG), LANG),
+                    width="stretch", config=ui.PLOT_CONFIG)
+    st.divider()
+    cbox, crad = st.columns(2)
+    with cbox:
+        fb = ui.fig_box_dap(resultados, estilos, LANG)
+        if fb:
+            st.plotly_chart(fb, width="stretch", config=ui.PLOT_CONFIG)
+    with crad:
+        met_radar = ["density_live_ha", "ba_live_ha", "canopy_height_m",
+                     "complexity_2_5", "complexity_10", "n_species_live"]
+        met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
+        if len(df_param) >= 2 and len(met_radar) >= 3:
+            st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
+                            width="stretch", config=ui.PLOT_CONFIG)
+
+with tabs[1]:
+    st.subheader(t("multi.ivi_title"))
+    st.caption(t("method.ivi_multi"))
+    # densidade e área basal absolutas: troncos somados / soma das áreas das parcelas
+    ivi = mc.pooled_importance(resultados)
+    if ivi is not None and not ivi.empty:
+        st.dataframe(ui.for_display(ivi, lang=LANG).style.format(precision=2),
+                     width="stretch")
+        fig = ui.fig_ivi(ivi, estilos, LANG)
+        if fig:
+            st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
+
+with tabs[2]:
+    st.subheader(t("multi.species_title"))
+    st.caption(t("multi.species_caption"))
+    ccol1, ccol2 = st.columns(2)
+    with ccol1:
+        met_esp = st.radio(t("single.metric"), ("ba_ha", "density_ha"),
+                           horizontal=True, key="met_esp",
+                           format_func=lambda k: ui.label(k, LANG))
+    with ccol2:
+        cond_esp = st.radio(t("labels.condition"), ("both", "live", "dead"),
+                            horizontal=True, key="cond_esp",
+                            format_func=lambda k: ui.condition_label(k, LANG))
+    metrica_key = "area" if met_esp == "ba_ha" else "densidade"
+    df_long = ui.dados_especies_parcelas(resultados, metrica=metrica_key)
+    fig_esp = ui.fig_especies_parcelas(df_long, estilos, ui.label(met_esp, LANG),
+                                       condicao=cond_esp, lang=LANG)
+    if fig_esp:
+        st.plotly_chart(fig_esp, width="stretch", config=ui.PLOT_CONFIG)
+    else:
+        st.warning(t("multi.no_data_combo"))
+    # pivot table: plots in rows, components (species + L/D) in columns
+    if not df_long.empty:
+        dft = df_long.copy()
+        if cond_esp != "both":
+            dft = dft[dft["condition"] == cond_esp]
+        dft["component"] = (dft["species"].map(lambda v: ui.species_name(v, LANG))
+                            + " (" + dft["condition"].map(
+                                lambda v: ui.condition_label(v, LANG)).str[0] + ")")
+        piv = dft.pivot_table(index="plot", columns="component", values="value",
+                              aggfunc="sum", fill_value=0)
+        piv.index.name = ui.label("plot", LANG)
+        st.dataframe(piv.style.format("{:.2f}"), width="stretch")
+        st.download_button(t("multi.species_csv"),
+                           data=piv.to_csv().encode("utf-8"),
+                           file_name=t("file.species_by_plot"), mime="text/csv")
+
+with tabs[3]:
+    map_rows = []
+    for res in resultados:
+        d = res["data"]
+        if "lat" in d.columns and "lon" in d.columns:
+            m = d[["lat", "lon"]].dropna().drop_duplicates()
+            if not m.empty:
+                map_rows.append(m.iloc[0].to_dict())
+    st.subheader(t("multi.locations"))
+    if map_rows:
+        st.map(pd.DataFrame(map_rows))
+    else:
+        st.info(t("map.no_coordinates"))
+
+with tabs[4]:
+    st.subheader(t("multi.export"))
+    # IVI agregado e contribuição por espécie (para o relatório)
+    ivi_all = mc.pooled_importance(resultados)
+    df_long_esp = ui.dados_especies_parcelas(resultados, "area")
+
+    sig = ("multi", tuple(r["plot_name"] for r in resultados), limites, cfg_sig, LANG, show_seal)
+    if st.session_state.get("pdf_sig_multi") != sig:
+        with st.spinner(t("export.preparing_pdf_all")):
+            try:
+                from manguetree import report as rep
+                st.session_state["pdf_multi"] = rep.multiple_plots_report(
+                    resultados, df_param, ivi_all, df_long_esp,
+                    ui.issues_frame_by_unit(problemas, t("labels.sheet"), LANG),
+                    lang=LANG, seal=show_seal)
+                st.session_state["pdf_sig_multi"] = sig
+            except Exception as e:
+                st.session_state["pdf_multi"] = None
+                st.warning(t("export.pdf_unavailable", error=str(e)))
+
+    cc = st.columns(3)
+    with cc[0]:
+        if st.session_state.get("pdf_multi"):
+            st.download_button(t("export.pdf"), data=st.session_state["pdf_multi"],
+                               file_name=t("file.multi_pdf"),
+                               mime="application/pdf", type="primary")
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xls:
+        ui.for_display(df_param, lang=LANG).to_excel(
+            xls, sheet_name=t("sheet.comparison"), index=False)
+        if ivi_all is not None and not ivi_all.empty:
+            ui.for_display(ivi_all, lang=LANG).round(3).to_excel(
+                xls, sheet_name=t("sheet.ivi"), index=False)
+        for res in resultados:
+            nome = re.sub(r"[\\/*?:\[\]]", "", str(res["plot_name"]))[:26]
+            ui.tabela_por_especie(res, LANG).round(3).to_excel(
+                xls, sheet_name=(nome or "parc")[:26], index=False)
+        df_problemas.to_excel(xls, sheet_name=t("sheet.issues"), index=False)
+    buf.seek(0)
+    with cc[1]:
+        st.download_button(t("export.excel"), data=buf.getvalue(),
+                           file_name=t("file.multi_xlsx"),
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    with cc[2]:
+        st.download_button(t("multi.comparison_csv"),
+                           data=ui.for_display(df_param, lang=LANG).to_csv(
+                               index=False).encode("utf-8"),
+                           file_name=t("file.comparison"), mime="text/csv")
+    st.caption(t("export.multi_note"))

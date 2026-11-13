@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "MangueTREE: structural and phytosociological analysis of mangrove forest plots"
+abstract: "Python engine and Streamlit app that computes forest structure, phytosociology (relative values and importance value), DBH classes and the Holdridge complexity index from stem-level field data of mangrove plots."
+type: software
+version: 1.0.0
+date-released: 2026-11-13
+license: MIT
+repository-code: "https://github.com/luq317/MangueTREE"
+authors:
+  - family-names: Pereira
+    given-names: Lucas Silva
+    orcid: "https://orcid.org/0000-0002-1891-7621"
+    email: pereira.lucas_1@posgraduacao.uerj.br
+    affiliation: "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil; Programa de Pós-Graduação em Oceanografia, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+  - family-names: Matta
+    given-names: Tatiane Costa da
+    orcid: "https://orcid.org/0009-0000-4133-5729"
+    affiliation: "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil; Programa de Pós-Graduação em Oceanografia, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+  - family-names: Chaves
+    given-names: Filipe de Oliveira
+    orcid: "https://orcid.org/0000-0001-7114-7585"
+    affiliation: "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+  - family-names: Soares
+    given-names: Mário Luiz Gomes
+    orcid: "https://orcid.org/0000-0002-3312-7257"
+    affiliation: "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil; Programa de Pós-Graduação em Oceanografia, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+keywords:
+  - mangrove
+  - forest structure
+  - phytosociology
+  - importance value
+  - Holdridge complexity index
+  - Streamlit

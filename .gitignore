@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+.streamlit/secrets.toml
+*.xlsx
+!data/*.xlsx
+!tests/data/*
+build/
+dist/
+*.egg-info/
