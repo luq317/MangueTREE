@@ -49,6 +49,10 @@ def css(tab_icons=()):
     rules += [_before(f'[role="tablist"] [data-testid="stTab"][data-key="{i}"] p', name)
               for i, name in enumerate(tab_icons) if name]
     rules.append('[data-testid="stTab"] p{display:flex;align-items:center;}')
+    # selector titles (Métrica, Condição, Tipo de gráfico...) stand out from the options
+    rules.append('[data-testid="stWidgetLabel"] p{font-weight:600!important;color:#1F4D3A;}'
+                 '[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p'
+                 '{font-weight:400!important;color:inherit;}')
     # metric cards: labels wrap instead of being cut, values never end in "..."
     rules.append('[data-testid="stMetricLabel"] p,[data-testid="stMetricLabel"] div'
                  '{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;}'
