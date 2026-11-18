@@ -13,14 +13,14 @@ from manguetree import i18n
 from manguetree.i18n import t
 from manguetree.validation import validate
 
-st.set_page_config(layout="wide", page_title=t("single.page_title"), page_icon="📊")
+st.set_page_config(layout="wide", page_title=t("single.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar)
+ui.sidebar_nav(st.sidebar, tab_icons=("estrutura", "fitossociologia", "classes_dap", "altura", "mapa", "exportar"))
 ui.topo(t("single.title"), t("single.subtitle"))
 st.markdown(t("single.intro"))
 
 # ---------------- SIDEBAR ----------------
-st.sidebar.header(t("sidebar.settings"))
+ui.icon_heading(st.sidebar, "configuracoes", t("sidebar.settings"))
 uploaded = st.sidebar.file_uploader(t("single.upload"),
                                     type=["xlsx", "csv", "txt"], key="upload_unico")
 # A workbook can hold several plots (one per sheet): the user picks the sheet.
@@ -61,7 +61,7 @@ largura_classe = st.sidebar.number_input(t("single.class_width"),
                                           min_value=1.0, value=5.0, step=1.0, key="width_unica")
 
 st.sidebar.divider()
-st.sidebar.header(t("sidebar.style"))
+ui.icon_heading(st.sidebar, "estilo", t("sidebar.style"))
 paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_unica",
                                     format_func=lambda c: ui.palette_label(c, LANG))
 tam_titulo = st.sidebar.slider(t("sidebar.title_font"), 10, 24, 14, key="tit_unica")
@@ -73,7 +73,7 @@ estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": tam_titulo,
 
 # ---------------- CARGA ----------------
 if not uploaded:
-    st.info(t("single.upload_prompt"))
+    ui.icon_note(st, "enviar", t("single.upload_prompt"))
     st.stop()
 
 area_final = area_parcela

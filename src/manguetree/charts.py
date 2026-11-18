@@ -6,6 +6,7 @@ Gráficos (Plotly, qualidade de publicação) e exportações (Excel/CSV)
 compartilhados pelas páginas do MangueTREE.
 """
 
+from pathlib import Path
 import hashlib
 import io
 import numpy as np
@@ -844,22 +845,43 @@ def seal_checkbox(container):
     return value
 
 
-NAV_PAGES = (("Home.py", "nav.home", "🏠"),
-             ("pages/1_Single_plot.py", "nav.single", "🌳"),
-             ("pages/2_Multiple_plots.py", "nav.multiple", "🌲"),
-             ("pages/3_Temporal.py", "nav.temporal", "📈"),
-             ("pages/4_About.py", "nav.about", "ℹ️"))
+PAGE_ICON = str(Path(__file__).parent / "app" / "assets" / "logo.png")
+NAV_PAGES = (("Home.py", "nav.home"), ("pages/1_Single_plot.py", "nav.single"),
+             ("pages/2_Multiple_plots.py", "nav.multiple"), ("pages/3_Temporal.py", "nav.temporal"),
+             ("pages/4_About.py", "nav.about"))
 
 
-def sidebar_nav(container):
-    """Page menu with translated names. Streamlit's automatic menu (built from the
-    file names) is turned off in .streamlit/config.toml (showSidebarNavigation)."""
-    for page, key, icon in NAV_PAGES:
+def sidebar_nav(container, tab_icons=()):
+    """Page menu with translated names and the MangueTREE icons (icons.css). Streamlit's
+    automatic menu (built from the file names) is turned off in .streamlit/config.toml
+    (showSidebarNavigation). ``tab_icons``: icon names of the page's tabs, in order."""
+    import streamlit as st
+    from manguetree import icons
+    st.html(icons.css(tab_icons))
+    for page, key in NAV_PAGES:
         try:
-            container.page_link(page, label=i18n.t(key), icon=icon)
+            container.page_link(page, label=i18n.t(key))
         except Exception:        # outside a multipage run (unit tests of a single page)
             pass
     container.divider()
+
+
+def icon_heading(container, icon, text, level=2):
+    """Heading with a MangueTREE icon (replaces st.header/subheader with emoji)."""
+    from manguetree import icons
+    container.markdown(f'<h{level} style="display:flex;align-items:center">{icons.img(icon, 22 if level <= 2 else 18, "0")}'
+                       f'{text}</h{level}>', unsafe_allow_html=True)
+
+
+def icon_note(container, icon, text):
+    """Info box with a MangueTREE icon (replaces st.info with a pointing emoji)."""
+    from manguetree import icons
+    import re
+    html = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    container.markdown(
+        f'<div style="display:flex;gap:10px;align-items:center;background:#EEF6F1;border-radius:8px;'
+        f'padding:14px 16px;color:#1F4D3A">{icons.img(icon, 22, "0")}<span>{html}</span></div>',
+        unsafe_allow_html=True)
 
 
 def quit_button(container):

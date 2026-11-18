@@ -15,19 +15,19 @@ from manguetree import io as mio
 from manguetree import i18n
 from manguetree.i18n import t
 
-st.set_page_config(layout="wide", page_title=t("multi.page_title"), page_icon="📈")
+st.set_page_config(layout="wide", page_title=t("multi.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar)
+ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "fitossociologia", "especies", "mapa", "exportar"))
 ui.topo(t("multi.title"), t("multi.subtitle"))
 st.markdown(t("multi.intro"))
 st.caption(t("multi.see_temporal"))
 
-st.sidebar.header(t("sidebar.settings"))
+ui.icon_heading(st.sidebar, "configuracoes", t("sidebar.settings"))
 uploaded = st.sidebar.file_uploader(t("sidebar.excel_file"), type=["xlsx"], key="upload_multi")
 RESOLVER = ui.sidebar_species_settings(st.sidebar)
 
 if not uploaded:
-    st.info(t("multi.upload_prompt"))
+    ui.icon_note(st, "enviar", t("multi.upload_prompt"))
     st.stop()
 
 try:
@@ -44,7 +44,7 @@ if st.session_state.get("multi_file") != _fid:
     st.session_state["multi_file"] = _fid
 
 # --- Fora do formulário: a paleta re-estiliza ao vivo ---
-st.sidebar.subheader(t("sidebar.style_sub"))
+ui.icon_heading(st.sidebar, "estilo", t("sidebar.style_sub"), 3)
 paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_multi",
                                     format_func=lambda c: ui.palette_label(c, LANG))
 show_seal = ui.seal_checkbox(st.sidebar)

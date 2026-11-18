@@ -7,7 +7,7 @@ from manguetree import i18n
 from manguetree.i18n import t
 from manguetree.species import load_species_table
 
-st.set_page_config(page_title=t("home.page_title"), page_icon="🌳", layout="wide")
+st.set_page_config(page_title=t("home.page_title"), page_icon=ui.PAGE_ICON, layout="wide")
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
 ui.sidebar_nav(st.sidebar)
 ui.quit_button(st.sidebar)
@@ -23,7 +23,7 @@ for col, (key, page) in zip(st.columns(3), cards):
     with col.container(border=True):
         st.markdown(f"**{t(f'home.page.{key}')}**")
         st.write(t(f"home.page.{key}_desc"))
-        st.page_link(page, label=t("home.open_page"), icon="➡️")
+        st.page_link(page, label=t("home.open_page") + " →")
 
 left, right = st.columns([3, 2], gap="large")
 with left:

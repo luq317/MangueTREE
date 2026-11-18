@@ -32,7 +32,7 @@ manguetree = "manguetree.launcher:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-manguetree = ["data/*", "app/*.py", "app/pages/*.py", "app/assets/*", "app/.streamlit/*", "locales/*.json"]
+manguetree = ["data/*", "app/*.py", "app/pages/*.py", "app/assets/*", "app/assets/icons/*", "app/.streamlit/*", "locales/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
