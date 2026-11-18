@@ -1532,8 +1532,12 @@ def style_controls(container, page, paleta_nome, show_seal):
         ta = st_slider(T("sidebar.axis_font"), 8, 20, 11, f"eix_{page}")
         bg = st_slider(T("style.bar_width"), 10, 100, 80, f"bar_{page}", T("style.bar_width_help"))
         hh = st_slider(T("style.height"), 300, 900, 450, f"alt_{page}", step=10)
+        import streamlit as st
+        full = st.checkbox(T("style.full_width"), value=True, key=f"full_{page}",
+                           help=T("style.full_width_help"))
+        ww = None if full else st_slider(T("style.width"), 300, 1600, 800, f"larg_{page}", step=10)
     return {"paleta": PALETAS[paleta_nome], "tamanho_titulo": tt, "tamanho_eixos": ta,
-            "seal": show_seal, "bar_width": bg / 100.0, "height": hh}
+            "seal": show_seal, "bar_width": bg / 100.0, "height": hh, "width": ww}
 
 
 def st_slider(label_, lo, hi, default, key, help_=None, step=1):
@@ -1551,14 +1555,20 @@ def show(container, fig, key, estilos=None):
     estilos = estilos or {}
     has_bars = any(getattr(tr, "type", "") == "bar" for tr in fig.data)
     with container.popover(T("chart.adjust"), icon=":material/tune:"):
-        h = st.number_input(T("style.height"), 200, 1600, int(estilos.get("height") or fig.layout.height or 450),
+        ca, cb = st.columns(2)
+        h = ca.number_input(T("style.height"), 200, 1600, int(estilos.get("height") or fig.layout.height or 450),
                             step=10, key=f"adjh_{key}")
+        full = cb.checkbox(T("style.full_width"), value=estilos.get("width") is None, key=f"adjfull_{key}")
+        w = None if full else cb.number_input(T("style.width"), 300, 2400, int(estilos.get("width") or 800),
+                                              step=10, key=f"adjw_{key}")
         bw = st.slider(T("style.bar_width"), 10, 100, int(100 * estilos.get("bar_width", 0.8)),
                        key=f"adjb_{key}") if has_bars else None
         c1, c2 = st.columns(2)
         ymin = c1.text_input(T("style.ymin"), "", key=f"adjy0_{key}")
         ymax = c2.text_input(T("style.ymax"), "", key=f"adjy1_{key}")
     fig.update_layout(height=h)
+    if w:                                   # fixed width: same size on screen and in the PNG
+        fig.update_layout(width=int(w), autosize=False)
     if bw is not None:
         fig.update_layout(bargap=1 - bw / 100.0)
 
@@ -1571,7 +1581,7 @@ def show(container, fig, key, estilos=None):
     if lo is not None or hi is not None:          # None keeps that end automatic
         fig.update_layout(yaxis_range=[lo, hi], yaxis_autorange=None)
     add_seal(fig)
-    container.plotly_chart(fig, width="stretch", config=PLOT_CONFIG, key=f"fig_{key}")
+    container.plotly_chart(fig, width=int(w) if w else "stretch", config=PLOT_CONFIG, key=f"fig_{key}")
 
 
 _ZIP_JS = r"""
@@ -1612,7 +1622,6 @@ def batch_png_button(container, dpi, zip_name="MangueTREE_figuras.zip"):
     """Button that saves every chart of the open tab as PNG (at ``dpi``) in one ZIP.
     The charts are drawn in the browser, so no extra program is needed."""
     import json
-    import streamlit.components.v1 as components
     T = i18n.t
     js = (_ZIP_JS.replace("SCALE", str(dpi / 96.0)).replace("ZIPNAME", json.dumps(zip_name))
           .replace("MSG_NONE", json.dumps(T("export.batch_none"))).replace("MSG_WORK", json.dumps(T("export.batch_work")))
@@ -1621,5 +1630,4 @@ def batch_png_button(container, dpi, zip_name="MangueTREE_figuras.zip"):
             f'<button id="go" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2E8B57;'
             f'background:#fff;color:#1F4D3A;font-weight:600;cursor:pointer">{T("export.batch_button")}</button>'
             f'<div id="st" style="font-size:12px;color:#5F726A;margin-top:4px"></div><script>{js}</script></body>')
-    with container:
-        components.html(html, height=70)
+    container.iframe(html, height=70)          # st.iframe: runs the script, reaches the page

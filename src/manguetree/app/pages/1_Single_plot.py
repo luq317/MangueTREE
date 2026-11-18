@@ -138,9 +138,8 @@ with tab_panel:
         t("dashboard.subtitle", area=N(area_final, 0), n=r["n_species_live"])]
     sub_p = " · ".join(partes)
     cores_p = ui.species_colors(res["data"]["species_label"].unique())
-    import streamlit.components.v1 as components     # iframe: keeps the SVG figures and hovers
-    components.html('<body style="margin:0">' + dash.panel_html(res, tema, LANG, cores_p, sub_p) + "</body>",
-                    height=730, scrolling=True)
+    st.iframe('<body style="margin:0">' + dash.panel_html(res, tema, LANG, cores_p, sub_p) + "</body>",
+              height=730)      # keeps the SVG figures and the hover values
     d1, d2 = st.columns(2)
     d1.download_button(t("dashboard.png"), dash.summary_panel(res, tema, LANG, cores_p, "png", dpi_p, sub_p),
                        file_name=f"MangueTREE_painel_{plot_name}.png", mime="image/png", type="primary")

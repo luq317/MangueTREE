@@ -16,8 +16,8 @@ The home page offers a **data template** (Portuguese or English headers; Excel w
 - **Species table.** An expander shows the table of species and aliases. You can edit it, add species, upload your own CSV with the same columns, or reset it.
 - **DBH class cutoffs.** Two cutoffs in cm (2.5 and 10 by default) that define three classes and the two Holdridge indices.
 - **Plot area.** Read from the file when possible. The default area (100 m²) is used only when the file has none, and the data check warns when that happens.
-- **Style.** Colour palette (MangueTREE keeps a colour per species; Lab and Greens recolour the species), the MangueTREE seal (lower right corner, outside the chart) and **Chart settings**: title and axis font, bar width and chart height for every chart of the page.
-- **Adjust (on each chart).** Height, bar width and Y axis limits of that chart only.
+- **Style.** Colour palette (MangueTREE keeps a colour per species; Lab and Greens recolour the species), the MangueTREE seal (lower right corner, outside the chart) and **Chart settings**: title and axis font, bar width, chart height and width (full width or a fixed width in pixels) for every chart of the page.
+- **Adjust (on each chart).** Height, width, bar width and Y axis limits of that chart only. A fixed width is also the width of the saved PNG.
 - **Figures of the open tab.** Saves every chart of the open tab as PNG, in one ZIP, at the chosen resolution (150 to 600 DPI). The camera icon of each chart saves that chart alone.
 
 ## Data check

@@ -14,7 +14,7 @@ Large update made with the NEMA/UERJ laboratory. Laiza Lacerda Motta joins the a
 - Single plot: interactive summary panel (values on hover; light or dark; PNG or PDF download); vertical profile as circles (default, with a size legend), stems, strata or distribution by species; species selection for the height × DBH regression with the equations beside the chart; RD%, RDo%, RF% and IVI explained under the table; 100% option for DBH classes and phytosociology; share (%) next to each value in the table by genus.
 - Multiple plots: free chart (box plot, violin, columns or line; dual axis with line or markers; X × Y) opening on DBH; explanation of the normalised profile; share of each species (live and dead) in the parameter table; species chart with stacked or 100% columns and dead part hatched.
 - Temporal: several workbooks (one per plot) analysed together, one line per plot or mean ± SD; every plot parameter (DBH, heights, live, dead and total density and basal area, counts, mortality in stems and basal area, Holdridge, richness, each DBH class, stems without DBH); every species parameter (density and basal area live, dead and total, shares, DBH, heights, RD, RDo); live + dead by species with the dead part hatched; plots side by side, one species with the plots side by side, and the difference between two plots; title above the tables saying what they show; columns side by side for years without a survey (option to keep the gaps).
-- Chart settings for the page (fonts, bar width, height) and an Adjust menu on each chart (height, bar width, Y limits).
+- Chart settings for the page (fonts, bar width, height, full or fixed width) and an Adjust menu on each chart (height, width, bar width, Y limits); a fixed width is kept in the saved PNG.
 - Every figure of the open tab as PNG in one ZIP, at 150 to 600 DPI.
 - Data template on the home page (Portuguese or English; Excel with instructions and species codes, or CSV).
 - Densities as stems per hectare or number of stems in the plot.
@@ -28,6 +28,7 @@ Large update made with the NEMA/UERJ laboratory. Laiza Lacerda Motta joins the a
 - PDF reports start with the results; the data check closes the report.
 - MangueTREE seal in the lower right corner, outside the plotting area.
 - Selector titles in bold.
+- Summary panel and figure export use `st.iframe`, the current Streamlit API (the deprecated `st.components.v1.html` is no longer used).
 
 ### Fixed
 
