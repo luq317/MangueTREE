@@ -288,7 +288,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
     for i, c in enumerate(cnt):
         h = 78 * c / mxc
         cor = (th["ink"] if theme == "light" else th["accent"]) if i == int(cnt.argmax()) else th["faint"]
-        bars += (f'<g><title>{labs[i]} cm: {int(c)}</title><rect x="{i*bw+5:.1f}" y="{92-h:.1f}" '
+        bars += (f'<g class="tip" data-tip="{labs[i]} cm: {int(c)}"><rect x="{i*bw+5:.1f}" y="{92-h:.1f}" '
                  f'width="{bw-10:.1f}" height="{h:.1f}" rx="4" fill="{cor}"/>'
                  f'<text x="{i*bw+bw/2:.1f}" y="{86-h:.1f}" class="n">{int(c)}</text>'
                  f'<text x="{i*bw+bw/2:.1f}" y="108" class="a">{labs[i]}</text></g>')
@@ -305,7 +305,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
                     for i, t_ in enumerate(tv))
     h_svg = (f'<svg viewBox="0 0 330 110" width="100%">'
              f'<line x1="{X(0)}" x2="{X(hmax)}" y1="60" y2="60" stroke="{th["track"]}" stroke-width="14" stroke-linecap="round"/>'
-             f'<g><title>{_esc(T("dashboard.height_sub", canopy=F(cn, 2)))}</title>'
+             f'<g class="tip" data-tip="{_esc(T("dashboard.height_sub", canopy=F(cn, 2)))} · {F(m_, 2)} ± {F(sd, 2)} m">'
              f'<line x1="{X(max(m_-sd, 0)):.1f}" x2="{X(m_+sd):.1f}" y1="60" y2="60" stroke="{th["accent"]}" stroke-width="14" stroke-linecap="round"/>'
              f'<circle cx="{X(m_):.1f}" cy="60" r="9" fill="{th["ink"]}" stroke="{th["card"]}" stroke-width="3"/></g>'
              f'<line x1="{X(cn):.1f}" x2="{X(cn):.1f}" y1="38" y2="82" stroke="{th["ink"]}" stroke-width="2" stroke-dasharray="4 3"/>'
@@ -319,8 +319,8 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
             continue
         w = 330 * sh / 100
         txt = f'<text x="{x0+8:.1f}" y="31" class="w">{F(sh, 0)}%</text>' if sh >= 8 else ""
-        seg += (f'<g><title>{_esc(name(sp))}: {F(sh, 1)}% · {F(row(sp, "density_live_ha"), 0)} '
-                f'{_esc(T("dashboard.stems_ha"))}</title><rect x="{x0:.1f}" y="10" width="{max(w-3, 1):.1f}" '
+        seg += (f'<g class="tip" data-tip="{_esc(name(sp))}: {F(sh, 1)}% · {F(row(sp, "density_live_ha"), 0)} '
+                f'{_esc(T("dashboard.stems_ha"))}"><rect x="{x0:.1f}" y="10" width="{max(w-3, 1):.1f}" '
                 f'height="34" rx="6" fill="{colors.get(sp, "#888")}"/>{txt}</g>')
         x0 += w
     leg = "".join(f'<span><i style="background:{colors.get(sp, "#888")}"></i><em>{_esc(name(sp))}</em></span>'
@@ -354,8 +354,8 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
                 lab = (f'<line x1="{cx+(R+4)*np.cos(mid):.1f}" y1="{cy+(R+4)*np.sin(mid):.1f}" x2="{lx:.1f}" '
                        f'y2="{ly:.1f}" stroke="{th["muted"]}"/><text x="{lx+(4 if anchor=="start" else -4):.1f}" '
                        f'y="{ly+4:.1f}" class="n" style="text-anchor:{anchor}">{F(100*fr, 0)}%</text>')
-            arcs += (f'<g><title>{_esc(name(sp))} · {_esc(T("condition." + cond))}: {F(val, 2)} m²/ha '
-                     f'({F(100*fr, 1)}%)</title><path d="{p}" fill="{fill}" stroke="{colors.get(sp, "#888") if cond=="dead" else th["card"]}" '
+            arcs += (f'<g class="tip" data-tip="{_esc(name(sp))} · {_esc(T("condition." + cond))}: {F(val, 2)} m²/ha '
+                     f'({F(100*fr, 1)}%)"><path d="{p}" fill="{fill}" stroke="{colors.get(sp, "#888") if cond=="dead" else th["card"]}" '
                      f'stroke-width="1.5"/></g>{lab}')
             ang = a1
     tab_rows = "".join(
@@ -373,8 +373,8 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
     mort_body = (f'<svg viewBox="0 0 330 46" width="100%"><defs><pattern id="hm" width="6" height="6" '
                  f'patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="{th["card"]}"/>'
                  f'<line x1="0" y1="0" x2="0" y2="6" stroke="{th["ink"]}" stroke-width="3"/></pattern></defs>'
-                 f'<g><title>{_esc(T("condition.live"))}: {F(lv, 1)}%</title><rect x="0" y="6" width="{330*lv/100:.1f}" height="28" rx="6" fill="{th["ink"] if theme == "light" else th["accent"]}"/></g>'
-                 f'<g><title>{_esc(T("condition.dead"))}: {F(100-lv, 1)}%</title><rect x="{330*lv/100:.1f}" y="6" width="{330*(100-lv)/100:.1f}" height="28" rx="6" fill="url(#hm)" stroke="{th["ink"]}"/></g>'
+                 f'<g class="tip" data-tip="{_esc(T("condition.live"))}: {F(lv, 1)}%"><rect x="0" y="6" width="{330*lv/100:.1f}" height="28" rx="6" fill="{th["ink"] if theme == "light" else th["accent"]}"/></g>'
+                 f'<g class="tip" data-tip="{_esc(T("condition.dead"))}: {F(100-lv, 1)}%"><rect x="{330*lv/100:.1f}" y="6" width="{330*(100-lv)/100:.1f}" height="28" rx="6" fill="url(#hm)" stroke="{th["ink"]}"/></g>'
                  f'<text x="10" y="25" class="w">{F(lv, 0)}%</text></svg>'
                  f'<div class="s">{_esc(T("dashboard.ba_live_dead"))}</div><hr>'
                  f'<div class="k">{_esc(T("dashboard.holdridge"))}</div>'
@@ -408,8 +408,16 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
     .mtp td:first-child{{text-align:left;padding-left:0;font-weight:400}} .mtp td.hn{{text-align:left;color:{th["muted"]};font-weight:400;font-size:11.5px;padding-top:10px}}
     .mtp .hatch{{background:repeating-linear-gradient(45deg,{th["muted"]} 0 2px,transparent 2px 5px);border:1px solid {th["muted"]}}}
     .mtp hr{{border:0;border-top:1px solid {th["track"]};margin:12px 0}}
+    .mtp .tip{{cursor:pointer;transition:opacity .15s}} .mtp svg:has(.tip:hover) .tip:not(:hover){{opacity:.45}}
+    #mttip{{position:fixed;pointer-events:none;background:{th["ink"]};color:{th["card"]};padding:6px 10px;border-radius:8px;
+           font-family:"Source Sans Pro","Inter",Arial,sans-serif;font-size:12.5px;font-weight:600;display:none;z-index:9;box-shadow:0 4px 12px rgba(0,0,0,.2);white-space:nowrap}}
     @media (max-width:900px){{.mtp .g{{grid-template-columns:1fr}} .mtp .c{{grid-column:span 1!important}}}}
     """
     return (f'<style>{css}</style><div class="mtp"><div class="hd"><div><h2>{_esc(res.get("plot_name") or "")}</h2>'
             f'<div class="sub">{_esc(subtitle)}</div></div><div class="brand">{logo}MangueTREE</div></div>'
-            f'<div class="g">{cards}</div></div>')
+            f'<div class="g">{cards}</div></div><div id="mttip"></div>'
+            '<script>const tt=document.getElementById("mttip");'
+            'document.querySelectorAll(".tip").forEach(g=>{'
+            'g.addEventListener("mousemove",e=>{tt.textContent=g.dataset.tip;tt.style.display="block";'
+            'tt.style.left=Math.min(e.clientX+14,window.innerWidth-tt.offsetWidth-8)+"px";tt.style.top=(e.clientY+14)+"px";});'
+            'g.addEventListener("mouseleave",()=>{tt.style.display="none";});});</script>')

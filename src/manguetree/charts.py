@@ -613,14 +613,17 @@ def fig_plot_distribution(resultados, estilos, param, kind="box", lang=None):
         frames.append(dd)
     cons = pd.concat(frames, ignore_index=True)
     f = px.violin if kind == "violin" else px.box
-    extra = dict(box=True, points="all") if kind == "violin" else {}
+    extra = dict(box=True, points=False) if kind == "violin" else {}
     fig = f(cons, x="plot", y=col, color="plot", color_discrete_sequence=estilos["paleta"],
             labels={"plot": label("plot", lang), col: label(col, lang)}, **extra)
-    fig.update_layout(showlegend=False, yaxis_title=label(col, lang))
+    # one shape per plot, centred on its name (no side-by-side offset)
+    fig.update_layout(showlegend=False, yaxis_title=label(col, lang),
+                      violinmode="overlay", boxmode="overlay")
     return _layout(fig, estilos, label(col, lang))
 
 
-def fig_free_compare(df_param, estilos, mode, a, b=None, lang=None, kind="bar", resultados=None):
+def fig_free_compare(df_param, estilos, mode, a, b=None, lang=None, kind="bar", resultados=None,
+                     second_style="lines+markers"):
     if mode == "single" and kind in ("box", "violin") and a in PER_STEM and resultados:
         return fig_plot_distribution(resultados, estilos, a, kind, lang)
     if mode == "single" and kind == "line":
@@ -629,10 +632,10 @@ def fig_free_compare(df_param, estilos, mode, a, b=None, lang=None, kind="bar", 
                                    line=dict(color=estilos["paleta"][0])))
         fig.update_layout(xaxis_title=label("plot", lang), yaxis_title=label(a, lang))
         return _layout(fig, estilos, label(a, lang))
-    return _fig_free_compare(df_param, estilos, mode, a, b, lang)
+    return _fig_free_compare(df_param, estilos, mode, a, b, lang, second_style)
 
 
-def _fig_free_compare(df_param, estilos, mode, a, b=None, lang=None):
+def _fig_free_compare(df_param, estilos, mode, a, b=None, lang=None, second_style="lines+markers"):
     """Free comparison of the plots: ``mode`` "single" (bars of ``a``), "dual" (bars of
     ``a`` on the left axis, line of ``b`` on the right) or "xy" (``a`` against ``b``)."""
     from plotly.subplots import make_subplots
@@ -649,10 +652,11 @@ def _fig_free_compare(df_param, estilos, mode, a, b=None, lang=None):
         fig.add_trace(go.Bar(x=df_param["plot"], y=df_param[a], name=label(a, lang),
                              marker_color=cores[0]), secondary_y=False)
         fig.add_trace(go.Scatter(x=df_param["plot"], y=df_param[b], name=label(b, lang),
-                                 mode="lines+markers", line=dict(color=cores[1 % len(cores)])),
+                                 mode=second_style, line=dict(color="#4C78A8", width=2.5),
+                                 marker=dict(size=11, symbol="diamond", color="#4C78A8")),
                       secondary_y=True)
         fig.update_yaxes(title_text=label(a, lang), secondary_y=False)
-        fig.update_yaxes(title_text=label(b, lang), secondary_y=True)
+        fig.update_yaxes(title_text=label(b, lang), secondary_y=True, rangemode="tozero")
         fig.update_xaxes(title_text=label("plot", lang))
         return _layout(fig, estilos, f"{label(a, lang)} · {label(b, lang)}")
     return fig_comparativo_barras(df_param, estilos, a, label(a, lang), lang)
@@ -679,6 +683,7 @@ def fig_species_plots_stacked(df_long, estilos, ylabel, chart="stack", show_valu
             vals = sub["_v"].fillna(0)
             fig.add_trace(go.Bar(
                 x=plots, y=vals, name=f"{species_name(sp, lang)} · {i18n.t('condition.' + cond, lang)}",
+                legendrank=10 * sorted(df["species"].unique(), key=str).index(sp) + (0 if cond == "live" else 1),
                 text=[num(v, 0 if chart == "stack100" else 2, lang) if v else "" for v in vals]
                 if show_values else None, textposition="inside",
                 marker=dict(color=cor if cond == "live" else "white", line=dict(color=cor, width=1.2),
@@ -689,8 +694,11 @@ def fig_species_plots_stacked(df_long, estilos, ylabel, chart="stack", show_valu
     if chart == "stack100":
         fig.update_yaxes(range=[0, 100], ticksuffix="%")
     fig = _layout(fig, estilos, i18n.t("chart.species_by_plot", lang))
-    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.2, x=0.5, xanchor="center"),
-                      margin=dict(b=120))
+    n_sp = df["species"].nunique()
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.18, x=0, xanchor="left",
+                                  entrywidth=0.5, entrywidthmode="fraction", font=dict(size=10),
+                                  traceorder="normal"),
+                      margin=dict(b=40 + 22 * n_sp), height=380 + 22 * n_sp)
     return fig
 
 
@@ -734,7 +742,7 @@ def fig_radar(df_param, estilos, metricas, lang=None):
                                       theta=nomes + [nomes[0]],
                                       fill="toself", name=str(row["plot"])))
     # the polar domain leaves room around the plot for the (long) axis labels
-    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1]),
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1], showticklabels=False),
                                  domain=dict(x=[0.24, 0.76], y=[0.08, 0.88])))
     return _layout(fig, estilos, i18n.t("chart.radar", lang))
 
@@ -1338,6 +1346,7 @@ def fig_species_live_dead(df_esp, estilos, metric, chart="stack", show_values=Fa
             txt = [num(v, 0 if chart == "stack100" else 2, lang) for v in vals] if show_values else None
             fig.add_trace(go.Bar(
                 x=sub["year"], y=vals, text=txt, textposition="inside",
+                legendrank=10 * order.index(sp) + (0 if cond == "live" else 1),
                 name=f"{species_name(sp, lang)} · {i18n.t('condition.' + cond, lang)}",
                 marker=dict(color=cor if cond == "live" else "white", line=dict(color=cor, width=1.2),
                             pattern=dict(shape=pattern, fgcolor=cor, size=6, solidity=0.35))))
@@ -1347,9 +1356,12 @@ def fig_species_live_dead(df_esp, estilos, metric, chart="stack", show_values=Fa
     if chart == "stack100":
         fig.update_yaxes(range=[0, 100], ticksuffix="%")
     fig = _layout(fig, estilos, i18n.t(f"temporal.metric.{metric}", lang))
-    # fixed frame, so two of these side by side have the same size
-    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
-                      margin=dict(t=46, r=24, b=130, l=80), height=480)
+    # fixed frame, so two of these side by side have the same size; legend: one row per
+    # species, live in the first column and dead in the second
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.26, x=0, xanchor="left",
+                                  entrywidth=0.5, entrywidthmode="fraction", font=dict(size=10),
+                                  traceorder="normal"),
+                      margin=dict(t=46, r=24, b=40 + 22 * len(order), l=80), height=380 + 22 * len(order))
     fig.update_yaxes(automargin=False)
     return _year_axis(fig, df, gaps)
 
@@ -1396,3 +1408,35 @@ def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False,
     fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
                       margin=dict(b=110))
     return _year_axis(fig, df, gaps)
+
+
+def fig_species_by_plot_panels(df_esp, estilos, metric, chart="stack", show_values=False, lang=None,
+                               gaps=False):
+    """Several plots side by side (one panel per plot, same y scale) for a per-species
+    parameter over the years."""
+    from plotly.subplots import make_subplots
+    lang = _lang(lang)
+    plots = list(dict.fromkeys(df_esp["plot"]))
+    ncol = min(len(plots), 3)
+    nrow = int(np.ceil(len(plots) / ncol))
+    fig = make_subplots(rows=nrow, cols=ncol, subplot_titles=[str(p) for p in plots],
+                        shared_yaxes=True, horizontal_spacing=0.04, vertical_spacing=0.14)
+    for i, p in enumerate(plots):
+        sub = fig_species_series(df_esp[df_esp["plot"] == p], estilos, metric, chart, show_values, lang, gaps)
+        if sub is None:
+            continue
+        for tr in sub.data:
+            tr.showlegend = i == 0
+            fig.add_trace(tr, row=i // ncol + 1, col=i % ncol + 1)
+        fig.update_xaxes(type="category" if not gaps else "linear", row=i // ncol + 1, col=i % ncol + 1,
+                         tickangle=-45)
+    fig.update_layout(barmode="stack" if chart != "bar" else "group",
+                      height=330 * nrow + 120,
+                      legend=dict(orientation="h", yanchor="top", y=-0.12, x=0, xanchor="left",
+                                  entrywidth=0.5, entrywidthmode="fraction", font=dict(size=10),
+                                  traceorder="normal"))
+    if chart == "stack100":
+        fig.update_yaxes(range=[0, 100], ticksuffix="%")
+    title = (i18n.t(f"temporal.metric.{metric}", lang) if metric in LIVE_DEAD_METRICS
+             else i18n.t("chart.by_species", lang, metric=label(metric, lang)))
+    return _layout(fig, estilos, title)

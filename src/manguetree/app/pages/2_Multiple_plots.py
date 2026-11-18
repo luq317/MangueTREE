@@ -151,39 +151,40 @@ tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.species"),
                 t("multi.tab.ivi"), t("multi.tab.map"), t("tab.check"), t("multi.tab.export")])
 
 with tabs[0]:
-    # first: the free chart (opens on the DBH of each plot) and the normalised profile
-    base_params = [c for c in ui.metric_columns(df_param) if str(c).isidentifier()]
-    cl, cr = st.columns(2)
-    with cl:
-        cf1, cf2 = st.columns(2)
-        modo_f = cf1.radio(t("multi.free_mode"), ("single", "dual", "xy"), horizontal=True,
-                           key="modo_livre", format_func=lambda k: t(f"multi.free.{k}"))
-        tipo_f = "bar"
-        if modo_f == "single":
-            tipo_f = cf2.radio(t("multi.chart_kind"), ("box", "violin", "bar", "line"), horizontal=True,
-                               key="tipo_livre", format_func=lambda k: t(f"multi.kind.{k}"))
-        ca_, cb_ = st.columns(2)
-        metrica = ca_.selectbox(t("multi.compare_by"), base_params,
-                                index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
-                                key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
-        segunda = None
-        if modo_f != "single":
-            segunda = cb_.selectbox(t("multi.second_param"), base_params,
-                                    index=min(1, len(base_params) - 1), key="metrica_multi_b",
-                                    format_func=lambda c: ui.label(c, LANG))
-        st.plotly_chart(ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
-                                            kind=tipo_f, resultados=resultados),
+    # first the normalised profile, then the free chart (opens on the DBH of each plot)
+    met_radar = ["mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
+                 "ba_live_ha", "complexity_2_5", "n_species_live"]
+    met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
+    if len(df_param) >= 2 and len(met_radar) >= 3:
+        st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
                         width="stretch", config=ui.PLOT_CONFIG)
-        if modo_f == "single" and tipo_f in ("box", "violin"):
-            st.caption(t("multi.kind_note"))
-    with cr:
-        met_radar = ["mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
-                     "ba_live_ha", "complexity_2_5", "n_species_live"]
-        met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
-        if len(df_param) >= 2 and len(met_radar) >= 3:
-            st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
-                            width="stretch", config=ui.PLOT_CONFIG)
-            st.caption(t("multi.radar_note"))
+        st.caption(t("multi.radar_note"))
+        st.divider()
+    base_params = [c for c in ui.metric_columns(df_param) if str(c).isidentifier()]
+    cf1, cf2, cf3 = st.columns(3)
+    modo_f = cf1.radio(t("multi.free_mode"), ("single", "dual", "xy"), horizontal=True,
+                       key="modo_livre", format_func=lambda k: t(f"multi.free.{k}"))
+    tipo_f, estilo_2 = "bar", "lines+markers"
+    if modo_f == "single":
+        tipo_f = cf2.radio(t("multi.chart_kind"), ("box", "violin", "bar", "line"), horizontal=True,
+                           key="tipo_livre", format_func=lambda k: t(f"multi.kind.{k}"))
+    elif modo_f == "dual":
+        estilo_2 = cf2.radio(t("multi.second_style"), ("lines+markers", "markers"), horizontal=True,
+                             key="estilo_2", format_func=lambda k: t(f"multi.second_style.{k}"))
+    ca_, cb_ = st.columns(2)
+    metrica = ca_.selectbox(t("multi.compare_by"), base_params,
+                            index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
+                            key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
+    segunda = None
+    if modo_f != "single":
+        segunda = cb_.selectbox(t("multi.second_param"), base_params,
+                                index=min(1, len(base_params) - 1), key="metrica_multi_b",
+                                format_func=lambda c: ui.label(c, LANG))
+    st.plotly_chart(ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
+                                        kind=tipo_f, resultados=resultados, second_style=estilo_2),
+                    width="stretch", config=ui.PLOT_CONFIG)
+    if modo_f == "single" and tipo_f in ("box", "violin"):
+        st.caption(t("multi.kind_note"))
     st.divider()
     st.subheader(t("multi.params_by_plot"))
     st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
