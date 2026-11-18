@@ -47,6 +47,7 @@ if st.session_state.get("multi_file") != _fid:
 ui.icon_heading(st.sidebar, "estilo", t("sidebar.style_sub"), 3)
 paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_multi",
                                     format_func=lambda c: ui.palette_label(c, LANG))
+ui.use_palette(paleta_nome)
 show_seal = ui.seal_checkbox(st.sidebar)
 estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": 14, "tamanho_eixos": 11,
            "seal": show_seal}

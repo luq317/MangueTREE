@@ -64,6 +64,7 @@ st.sidebar.divider()
 ui.icon_heading(st.sidebar, "estilo", t("sidebar.style"))
 paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_unica",
                                     format_func=lambda c: ui.palette_label(c, LANG))
+ui.use_palette(paleta_nome)
 tam_titulo = st.sidebar.slider(t("sidebar.title_font"), 10, 24, 14, key="tit_unica")
 tam_eixos = st.sidebar.slider(t("sidebar.axis_font"), 8, 20, 11, key="eix_unica")
 show_seal = ui.seal_checkbox(st.sidebar)

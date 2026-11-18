@@ -71,3 +71,15 @@ def test_live_dead_chart_hatches_the_dead_part():
 def test_dynamics_tab_is_gone():
     src = (APP / "pages" / "3_Temporal.py").read_text(encoding="utf-8")
     assert "dynamics" not in src
+
+
+def test_palette_recolours_species():
+    from streamlit.testing.v1 import AppTest as _AT  # noqa: F401
+    import streamlit as st
+    st.session_state[ui.PALETTE_STATE] = "lab"
+    try:
+        cores = ui.species_colors(["Rhizophora mangle", "Avicennia schaueriana"])
+        assert cores["Avicennia schaueriana"] == ui.PALETAS["lab"][0]
+    finally:
+        st.session_state[ui.PALETTE_STATE] = "manguetree"
+    assert ui.species_colors(["Rhizophora mangle"])["Rhizophora mangle"] == mc.species_color("Rhizophora mangle")

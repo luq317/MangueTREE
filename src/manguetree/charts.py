@@ -48,6 +48,11 @@ def _selo_uri():
 
 # Palette code -> colours; the display name is the catalog entry ``palette.<code>``.
 PALETAS = {
+    # "manguetree": each species keeps its own colour (genus hue); the other palettes
+    # also recolour the species, in the order of their scientific names
+    "manguetree": ["#2E8B57", "#1F4D3A", "#4C78A8", "#7B5230", "#9FD3B2", "#8C9A94", "#C9A27E"],
+    "lab": ["#1F3A5F", "#2A9D8F", "#B8C4CC", "#5F7A94", "#8FD1C7", "#E4E9EE"],
+    "greens": ["#1B5E20", "#43A047", "#A5D6A7", "#2E7D32", "#81C784", "#C8E6C9"],
     "default": pcolors.qualitative.Plotly,
     "pastel": pcolors.qualitative.Pastel,
     "bold": pcolors.qualitative.Bold,
@@ -127,9 +132,34 @@ def _layout(fig, estilos, titulo=None):
     return fig
 
 
+PALETTE_STATE = "_palette"      # session key with the palette chosen on the current page
+
+
+def use_palette(name):
+    """Remember the page's palette (species charts read it through species_colors)."""
+    import streamlit as st
+    st.session_state[PALETTE_STATE] = name
+
+
+def species_colors(especies):
+    """Species -> colour. Palette "manguetree" (default): genus hue, own tone per species;
+    any other palette: its colours in the order of the scientific names."""
+    try:
+        import streamlit as st
+        nome = st.session_state.get(PALETTE_STATE, "manguetree")
+    except Exception:
+        nome = "manguetree"
+    especies = list(dict.fromkeys(especies))
+    if nome not in PALETAS or nome == "manguetree":
+        return {e: mc.species_color(e) for e in especies}
+    cores = PALETAS[nome]
+    ordem = sorted(especies, key=lambda s: (s == mc.UNIDENTIFIED_LABEL, str(s)))
+    return {sp: cores[i % len(cores)] for i, sp in enumerate(ordem)}
+
+
 def cor_por_especie(especies):
-    """Mapa espécie->cor: matiz do gênero, tom próprio por espécie."""
-    return {e: mc.species_color(e) for e in especies}
+    """Mapa espécie->cor (segue a paleta escolhida; ver species_colors)."""
+    return species_colors(especies)
 
 
 # Column labels live in the catalogs as ``labels.<internal column>``; the prepared data
@@ -262,7 +292,8 @@ def dbh_class_label(text, lang=None):
 
 def _cmap(species, lang):
     """Display name -> colour (colours follow the scientific name, not the language)."""
-    return {species_name(e, lang): mc.species_color(e) for e in species}
+    cores = species_colors(species)
+    return {species_name(e, lang): cores[e] for e in species}
 
 
 # ---------------------------------------------------------------------------
@@ -1064,6 +1095,11 @@ def fig_series(df, estilos, y, view="plots", chart="line", lang=None, gaps=False
                       gaps=gaps or (view == "mean" and chart == "line" and len(plots) > 1))
 
 
+def palette_species_colors(species, estilos):
+    """Species -> colour, following the palette chosen in the sidebar."""
+    return species_colors(species)
+
+
 LIVE_DEAD_METRICS = {"live_dead_density": ("density_live_ha", "density_dead_ha", "density_total_ha"),
                      "live_dead_ba": ("ba_live_ha", "ba_dead_ha", "ba_total_ha")}
 
@@ -1079,13 +1115,14 @@ def fig_species_live_dead(df_esp, estilos, metric, chart="stack", show_values=Fa
     df = df_esp.sort_values("year").copy()
     tot = df.groupby("year")[total].transform("sum")
     order = df.groupby("species")[total].mean().sort_values(ascending=False).index.tolist()
+    cores = palette_species_colors(df["species"].unique(), estilos)
     fig = go.Figure()
     for cond, col, pattern in (("live", viva, ""), ("dead", morta, "/")):
         for sp in order:
             sub = df[df["species"] == sp]
             vals = (100 * sub[col] / tot[sub.index]).where(tot[sub.index] > 0, 0.0) \
                 if chart == "stack100" else sub[col]
-            cor = mc.species_color(sp)
+            cor = cores[sp]
             txt = [num(v, 0 if chart == "stack100" else 2, lang) for v in vals] if show_values else None
             fig.add_trace(go.Bar(
                 x=sub["year"], y=vals, text=txt, textposition="inside",
@@ -1121,10 +1158,11 @@ def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False,
         df["_v"] = np.where(tot > 0, 100 * df[metric] / tot, 0.0)
     else:
         df["_v"] = df[metric]
+    cores = palette_species_colors(df["species"].unique(), estilos)
     for sp in order:
         sub = df[df["species"] == sp]
         nome = species_name(sp, lang)
-        cor = mc.species_color(sp)
+        cor = cores[sp]
         if chart == "line":
             fig.add_trace(go.Scatter(x=sub["year"], y=sub["_v"], mode="lines+markers", name=nome,
                                      line=dict(color=cor)))

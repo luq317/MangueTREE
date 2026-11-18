@@ -68,6 +68,7 @@ if st.session_state.get("temp_file") != _fid:
 ui.icon_heading(st.sidebar, "estilo", t("sidebar.style_sub"), 3)
 paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_temp",
                                     format_func=lambda c: ui.palette_label(c, LANG))
+ui.use_palette(paleta_nome)
 show_seal = ui.seal_checkbox(st.sidebar)
 estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": 14, "tamanho_eixos": 11,
            "seal": show_seal}
@@ -225,7 +226,6 @@ params = [c for c in mc.metric_columns(df_serie)]
 tabs = st.tabs([t("temporal.tab.evolution"), t("temporal.tab.species"),
                 t("temporal.tab.mortality"), t("temporal.tab.series"), t("tab.check"),
                 t("temporal.tab.export")])
-GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_temp")
 
 with tabs[0]:
     st.subheader(t("temporal.evolution"))
@@ -237,6 +237,7 @@ with tabs[0]:
     with cg:
         grafico = st.radio(t("temporal.chart"), ("line", "bar"), horizontal=True, key="graf_evol",
                            format_func=lambda k: t(f"temporal.chart.{k}"))
+    GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_evol")
     if modo == "separate":
         padrao = [p for p in ["mean_dbh_cm", "height_mean_m", "canopy_height_m",
                               "density_live_ha", "ba_live_ha"] if p in params]
@@ -285,6 +286,7 @@ with tabs[1]:
                             format_func=lambda k: t(f"temporal.chart.{k}"))
         with c3_:
             valores = st.checkbox(t("temporal.show_values"), value=False, key="val_esp_temp")
+            GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_esp")
         if MULTI:
             escolha = st.selectbox(t("temporal.plot_choice"), ["__mean__"] + PLOTS, key="plot_esp_temp",
                                    format_func=lambda p: t("temporal.all_plots_mean") if p == "__mean__" else p)
@@ -316,6 +318,7 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader(t("temporal.mortality"))
+    GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_mort")
     ca, cb = st.columns(2)
     ca.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_stems_pct", VIEW, "line", LANG, GAPS),
                     width="stretch", config=ui.PLOT_CONFIG)
