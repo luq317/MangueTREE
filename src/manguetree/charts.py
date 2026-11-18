@@ -146,6 +146,10 @@ def label(col, lang=None, data_table=False):
     """Display label of an internal column name in ``lang`` (default: current)."""
     if data_table and col in _DATA_COLUMNS:
         return i18n.t(f"labels.data.{col}", _lang(lang))
+    if " [" in str(col) and str(col).endswith("]"):     # "<parameter> [<DBH class>]"
+        base, cls = str(col).split(" [", 1)
+        if base.isidentifier():
+            return f"{label(base, lang)} [{cls[:-1]} cm]"
     if not str(col).isidentifier():      # already a display name (e.g. species contribution)
         return str(col)
     return i18n.t(f"labels.{col}", _lang(lang))
@@ -172,7 +176,9 @@ def _num(value, decimals, lang):
 num = _num      # public alias: number text with the decimal separator of ``lang``
 
 
-COUNT_COLUMNS = ("plot_area_m2", "n_species_live")
+COUNT_COLUMNS = ("plot_area_m2", "n_species_live",
+                 "n_dead_no_dbh", "n_live_no_dbh", "n_live", "n_dead", "n_stems", "n_live_trees",
+                 "live_trees_start", "live_trees_end", "survivors", "deaths", "recruits")
 
 
 def integer_counts(df):
@@ -188,7 +194,7 @@ def integer_counts(df):
 def format_by_dtype(df, decimals=2):
     """``Styler.format`` mapping: integer columns without decimals, others with ``decimals``."""
     return {c: ("{:d}" if pd.api.types.is_integer_dtype(df[c]) else f"{{:.{decimals}f}}")
-            for c in df.columns}
+            for c in df.columns if pd.api.types.is_numeric_dtype(df[c])}
 
 
 def sheet_names(uploaded):
@@ -217,7 +223,8 @@ def for_display(df, data_table=False, lang=None, text_ids=True):
     names = {c: (species_name(c, lang) if c == mc.UNIDENTIFIED_LABEL
                  else label(c, lang, data_table))
              for c in out.columns
-             if c == mc.UNIDENTIFIED_LABEL or i18n.catalog(i18n.DEFAULT).get(f"labels.{c}")}
+             if c == mc.UNIDENTIFIED_LABEL or i18n.catalog(i18n.DEFAULT).get(f"labels.{c}")
+             or (" [" in str(c) and str(c).endswith("]"))}
     out = out.rename(columns=names)
     for col in ("species", "species_label"):
         if col in df.columns:
@@ -998,3 +1005,87 @@ def settings_signature():
     """(region, species-table hash) of the current sidebar settings."""
     import streamlit as st
     return st.session_state.get("settings_sig")
+
+
+# ---------------------------------------------------------------------------
+# TEMPORAL v1.1.0: every parameter, several plots, stacked columns
+# ---------------------------------------------------------------------------
+def _year_axis(fig, df):
+    years = sorted(df["year"].dropna().unique())
+    fig.update_xaxes(tickmode="array", tickvals=years, ticktext=[str(int(y)) for y in years],
+                     tickangle=-45 if len(years) > 12 else 0)
+    return fig
+
+
+def fig_series(df, estilos, y, view="plots", chart="line", lang=None):
+    """One parameter over the years. With several plots: one trace per plot
+    (``view="plots"``) or the mean with a band / error bars of one SD (``view="mean"``)."""
+    lang = _lang(lang)
+    cores = estilos["paleta"]
+    fig = go.Figure()
+    plots = list(dict.fromkeys(df["plot"])) if "plot" in df.columns else [None]
+    if view == "mean" and len(plots) > 1:
+        g = df.groupby("year")[y].agg(["mean", "std", "count"]).reset_index().fillna({"std": 0})
+        if chart == "bar":
+            fig.add_trace(go.Bar(x=g["year"], y=g["mean"], marker_color=cores[0],
+                                 error_y=dict(type="data", array=g["std"], visible=True),
+                                 name=i18n.t("temporal.view.mean", lang)))
+        else:
+            band = pd.concat([g["year"], g["year"][::-1]])
+            fig.add_trace(go.Scatter(x=band, y=pd.concat([g["mean"] + g["std"], (g["mean"] - g["std"])[::-1]]),
+                                     fill="toself", fillcolor="rgba(46,139,87,0.15)", line=dict(width=0),
+                                     hoverinfo="skip", showlegend=False))
+            fig.add_trace(go.Scatter(x=g["year"], y=g["mean"], mode="lines+markers",
+                                     line=dict(color=cores[0]), name=i18n.t("temporal.view.mean", lang)))
+    else:
+        for i, p in enumerate(plots):
+            sub = df if p is None else df[df["plot"] == p]
+            sub = sub.sort_values("year")
+            nome = str(p) if p is not None else label(y, lang)
+            if chart == "bar":
+                fig.add_trace(go.Bar(x=sub["year"], y=sub[y], name=nome, marker_color=cores[i % len(cores)]))
+            else:
+                fig.add_trace(go.Scatter(x=sub["year"], y=sub[y], mode="lines+markers", name=nome,
+                                         line=dict(color=cores[i % len(cores)])))
+        fig.update_layout(barmode="group", showlegend=len(plots) > 1)
+    fig.update_layout(xaxis_title=label("year", lang), yaxis_title=label(y, lang))
+    return _year_axis(_layout(fig, estilos, label(y, lang)), df)
+
+
+def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False, lang=None):
+    """A per-species parameter over the years: lines, grouped columns, stacked
+    columns or 100% stacked columns (each year's column adds up to 100%)."""
+    if df_esp is None or df_esp.empty:
+        return None
+    lang = _lang(lang)
+    df = df_esp.sort_values("year").copy()
+    order = (df.groupby("species")[metric].mean().sort_values(ascending=False).index.tolist())
+    fig = go.Figure()
+    if chart == "stack100":
+        tot = df.groupby("year")[metric].transform("sum")
+        df["_v"] = np.where(tot > 0, 100 * df[metric] / tot, 0.0)
+    else:
+        df["_v"] = df[metric]
+    for sp in order:
+        sub = df[df["species"] == sp]
+        nome = species_name(sp, lang)
+        cor = mc.species_color(sp)
+        if chart == "line":
+            fig.add_trace(go.Scatter(x=sub["year"], y=sub["_v"], mode="lines+markers", name=nome,
+                                     line=dict(color=cor)))
+        else:
+            txt = [num(v, 0 if chart == "stack100" else 2, lang) for v in sub["_v"]] if show_values else None
+            fig.add_trace(go.Bar(x=sub["year"], y=sub["_v"], name=nome, marker_color=cor,
+                                 text=txt, textposition="inside" if chart != "bar" else "outside",
+                                 insidetextanchor="middle"))
+    fig.update_layout(barmode={"bar": "group", "stack": "stack", "stack100": "stack"}.get(chart, "group"),
+                      legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
+                      xaxis_title=label("year", lang),
+                      yaxis_title=(i18n.t("temporal.chart.stack100", lang) + " · " + label(metric, lang))
+                      if chart == "stack100" else label(metric, lang))
+    if chart == "stack100":
+        fig.update_yaxes(range=[0, 100], ticksuffix="%")
+    fig = _layout(fig, estilos, i18n.t("chart.by_species", lang, metric=label(metric, lang)))
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
+                      margin=dict(b=110))
+    return _year_axis(fig, df)

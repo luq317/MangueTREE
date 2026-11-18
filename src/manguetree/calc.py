@@ -474,3 +474,132 @@ NON_METRIC_COLUMNS = ("plot", "year", "plot_area_m2")
 def metric_columns(df):
     """Metric columns of a comparison / series table (everything but NON_METRIC_COLUMNS)."""
     return [c for c in df.columns if c not in NON_METRIC_COLUMNS]
+
+
+# ---------------------------------------------------------------------------
+# 8. FULL PARAMETER SETS (time series and comparisons, v1.1.0)
+# ---------------------------------------------------------------------------
+def _valid(d):
+    return d[d["dbh"].notna() & (d["dbh"] > 0)]
+
+
+def _canopy(heights, n=10):
+    h = heights.dropna().sort_values(ascending=False)
+    return float(h.head(int(n)).mean()) if not h.empty else np.nan
+
+
+def plot_parameters(res, dbh_limits=(2.5, 10.0)):
+    """Every plot-level parameter of one analysis, flat (internal names).
+
+    Includes the structural summary, the two Holdridge indices, stem counts, stems
+    without DBH (left out of density and basal area, as in the NEMA/UERJ spreadsheet)
+    and, for each DBH class, live and dead density and basal area. Class columns are
+    named ``"<parameter> [<class>]"``.
+    """
+    s = dict(res["summary"])
+    d = res["data"]
+    ft = _ft(s["plot_area_m2"])
+    out = {k: s[k] for k in (
+        "plot_area_m2", "mean_dbh_cm", "height_mean_m", "height_sd_m", "height_min_m",
+        "height_max_m", "canopy_height_m", "density_live_ha", "density_dead_ha",
+        "density_total_ha", "ba_live_ha", "ba_dead_ha", "ba_total_ha", "n_live", "n_dead",
+        "n_stems", "n_live_trees", "stems_per_tree", "mortality_stems_pct",
+        "mortality_ba_pct", "n_species_live") if k in s}
+    out["complexity_2_5"] = res["complexity"]["dbh_gt_2.5"]["ci"]
+    out["complexity_10"] = res["complexity"]["dbh_gt_10"]["ci"]
+    no_dbh = d[~(d["dbh"].fillna(0) > 0)]
+    out["n_dead_no_dbh"] = int((~no_dbh["live"]).sum()) if "live" in no_dbh else 0
+    out["n_live_no_dbh"] = int(no_dbh["live"].sum()) if "live" in no_dbh else 0
+    v = _valid(d)
+    limits = tuple(float(x) for x in dbh_limits)
+    bins = [-np.inf] + list(limits) + [np.inf]
+    labels = [f"< {limits[0]:g}"] + [f"{a:g}–{b:g}" for a, b in zip(limits, limits[1:])] \
+        + [f"≥ {limits[-1]:g}"]
+    cls = pd.cut(v["dbh"], bins=bins, labels=labels, right=False)
+    for lab in labels:
+        sub = v[cls == lab]
+        for cond, part in (("live", sub[sub["live"]]), ("dead", sub[~sub["live"]])):
+            out[f"density_{cond}_ha [{lab}]"] = len(part) * ft
+            out[f"ba_{cond}_ha [{lab}]"] = float(part["basal_area_m2"].sum()) * ft
+    return out
+
+
+SPECIES_METRICS = (
+    "n_live", "n_dead", "n_stems",
+    "density_live_ha", "density_dead_ha", "density_total_ha",
+    "ba_live_ha", "ba_dead_ha", "ba_total_ha",
+    "share_density_live_pct", "share_density_dead_pct", "share_density_total_pct",
+    "share_ba_live_pct", "share_ba_dead_pct", "share_ba_total_pct",
+    "mean_dbh_cm", "height_mean_m", "canopy_height_m", "rel_density", "rel_dominance",
+)
+
+
+def species_parameters(res, canopy_n=10):
+    """Every per-species parameter of one analysis (one row per species).
+
+    Densities and basal areas per hectare (live, dead, total), the contribution (%)
+    of each species to the plot's live, dead and total density and basal area, the
+    quadratic mean DBH and the heights of the live stems, and the relative density
+    and dominance of the phytosociology table.
+    """
+    d = _valid(res["data"])
+    ft = _ft(res["summary"]["plot_area_m2"])
+    tot = {}
+    for cond, part in (("live", d[d["live"]]), ("dead", d[~d["live"]]), ("total", d)):
+        tot[("density", cond)] = len(part)
+        tot[("ba", cond)] = float(part["basal_area_m2"].sum())
+    imp = res.get("importance")
+    imp = imp.set_index("species") if imp is not None and not imp.empty else None
+    rows = []
+    for sp, sub in d.groupby("species_label"):
+        live, dead = sub[sub["live"]], sub[~sub["live"]]
+        row = {"species": sp, "n_live": len(live), "n_dead": len(dead), "n_stems": len(sub)}
+        for cond, part in (("live", live), ("dead", dead), ("total", sub)):
+            n, ba = len(part), float(part["basal_area_m2"].sum())
+            row[f"density_{cond}_ha"] = n * ft
+            row[f"ba_{cond}_ha"] = ba * ft
+            row[f"share_density_{cond}_pct"] = 100 * n / tot[("density", cond)] \
+                if tot[("density", cond)] else 0.0
+            row[f"share_ba_{cond}_pct"] = 100 * ba / tot[("ba", cond)] if tot[("ba", cond)] else 0.0
+        row["mean_dbh_cm"] = quadratic_mean_dbh(row["ba_live_ha"], row["density_live_ha"])
+        h = live["height"].dropna() if "height" in live else pd.Series(dtype=float)
+        row["height_mean_m"] = float(h.mean()) if not h.empty else np.nan
+        row["canopy_height_m"] = _canopy(h, canopy_n)
+        row["rel_density"] = float(imp.loc[sp, "rel_density"]) if imp is not None and sp in imp.index else np.nan
+        row["rel_dominance"] = float(imp.loc[sp, "rel_dominance"]) if imp is not None and sp in imp.index else np.nan
+        rows.append(row)
+    return pd.DataFrame(rows, columns=["species", *SPECIES_METRICS])
+
+
+def dynamics(res0, res1, years):
+    """Annual mortality and recruitment between two censuses of the same plot.
+
+    Trees are matched by ``tree_id`` (the tag): a tree is alive when it has at least one
+    live stem. Rates follow Sheil, Burslem & Alder (1995):
+        mortality   m = 1 - (S / N0) ** (1 / t)
+        recruitment r = 1 - (1 - R / N1) ** (1 / t)
+    with N0 and N1 the live trees in each census, S the trees alive in both and R the
+    trees alive in the second census that were not alive in the first; t in years.
+    Returns None when the censuses share no tag.
+    """
+    y0, y1 = years
+    t = float(y1 - y0)
+    def alive(res):
+        d = res["data"]
+        if "tree_id" not in d.columns:
+            return set()
+        ids = d.loc[d["live"] & d["tree_id"].notna(), "tree_id"].astype(str).str.strip()
+        return set(ids[ids != ""])
+    a0, a1 = alive(res0), alive(res1)
+    if t <= 0 or not a0 or not a1 or not (a0 & a1):
+        return None
+    n0, n1 = len(a0), len(a1)
+    surv, rec = len(a0 & a1), len(a1 - a0)
+    return {
+        "year_start": y0, "year_end": y1, "interval_years": t,
+        "live_trees_start": n0, "live_trees_end": n1, "survivors": surv,
+        "deaths": n0 - surv, "recruits": rec,
+        "mortality_rate_pct_yr": 100 * (1 - (surv / n0) ** (1 / t)),
+        "recruitment_rate_pct_yr": 100 * (1 - (1 - rec / n1) ** (1 / t)),
+        "net_change_pct_yr": 100 * ((n1 / n0) ** (1 / t) - 1),
+    }
