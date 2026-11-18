@@ -1,66 +1,69 @@
 # User guide
 
-This guide describes the MangueTREE app. For the engine as a library, see the Quick start in the [README](../README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
+This guide describes the MangueTREE app (version 1.1.0). For the engine as a library, see the Quick start in the [README](../README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
 
 ## Starting the app
 
-Run `manguetree` (or `streamlit run src/manguetree/app/Home.py`) and open `http://localhost:8501` if the browser does not open by itself. Desktop builds start with a double-click; see [installers.md](installers.md).
+Desktop builds start with a double-click; see the Download section of the [README](../README.md). From the source code, run `manguetree` (or `streamlit run src/manguetree/app/Home.py`) and open `http://localhost:8501` if the browser does not open by itself.
 
-The sidebar of every page starts with the language selector (English or Portuguese). The choice is kept when you move between pages and applies to tables, figures and exports.
+The app opens in Portuguese. The language selector (flag) at the top of the sidebar switches to English; the choice is kept between pages and applies to tables, figures and exports. Below it, the page menu (Home, Single plot, Multiple plots, Temporal, About).
+
+The home page offers a **data template** (Portuguese or English headers; Excel with an instructions sheet and the species codes, or CSV).
 
 ## Settings shared by the analysis pages
 
-- **Region.** Selects the species expected in your plots and how genus abbreviations such as `Rh` are resolved (`Av` is always *Avicennia schaueriana*; write `Ag` for *A. germinans*). Choose the region of your site: Brazil South and Southeast, Brazil North and Northeast, Caribbean and Western Atlantic, or Eastern Pacific (Americas).
-- **Species table.** An expander shows the table of species and aliases. You can edit it, add species, upload your own CSV with the same columns, or reset it. The table is provisional; check it against your regional flora.
-- **DBH class cutoffs.** Two cutoffs in cm (2.5 and 10 by default) that define three classes. The cutoffs must differ.
-- **Plot area.** The area is read from the file when possible. The default or fallback area (100 m²) is used only when the file has none; the data-check panel warns you when that happens. A `.csv` or `.txt` file never carries the area, so for those files the warning stays until you change the area in the sidebar from its default value.
-- **Style.** Colour palette and, on the single-plot page, font sizes. An option adds the MangueTREE seal to figures and PDF reports.
+- **Region.** Selects the species expected in your plots and how genus abbreviations are resolved. `Av` is always *Avicennia schaueriana* (write `Ag` for *A. germinans*); `Rh` is *Rhizophora mangle* in Brazil South and Southeast.
+- **Species table.** An expander shows the table of species and aliases. You can edit it, add species, upload your own CSV with the same columns, or reset it.
+- **DBH class cutoffs.** Two cutoffs in cm (2.5 and 10 by default) that define three classes and the two Holdridge indices.
+- **Plot area.** Read from the file when possible. The default area (100 m²) is used only when the file has none, and the data check warns when that happens.
+- **Style.** Colour palette (MangueTREE keeps a colour per species; Lab and Greens recolour the species), the MangueTREE seal (lower right corner, outside the chart) and **Chart settings**: title and axis font, bar width and chart height for every chart of the page.
+- **Adjust (on each chart).** Height, bar width and Y axis limits of that chart only.
+- **Figures of the open tab.** Saves every chart of the open tab as PNG, in one ZIP, at the chosen resolution (150 to 600 DPI). The camera icon of each chart saves that chart alone.
 
-## Data-check panel
+## Data check
 
-After you load a file, the data-check panel lists the issues found, with the spreadsheet row, a description and the action taken. Read it before the results. When stems have a DBH and a blank condition, the panel asks whether to exclude them (the default), count them as live, or count them as dead. See [data-format.md](data-format.md#validation) for every check.
+A line above the tabs gives the number of errors and warnings. The **Data check** tab (before Export) lists every issue with the spreadsheet row, a description and the action taken. When stems have a DBH and no condition, the tab asks whether to exclude them (default), count them as live or as dead. See [data-format.md](data-format.md#validation).
 
 ## Single plot
 
-Upload an `.xlsx`, `.csv` or `.txt` file. When an Excel workbook has several sheets, pick the sheet (one plot) in the sidebar; its name becomes the plot name in the titles, the PDF and the exports. For CSV or TXT, set the delimiter (`;` by default). Set the plot area (always for CSV or TXT; for Excel, when the sheet does not carry it), or give the cell that holds it (for example `B4`).
+Upload an `.xlsx`, `.csv` or `.txt` file; with several sheets, pick the sheet (one plot).
 
-The page shows:
-
-- the structural parameters (live density and basal area, mean DBH, mean and canopy height, stems per tree, mortality, Holdridge indices) on the Structure tab, and the full summary table in the exports (PDF and Excel), which adds dead and total density and basal area and the minimum and maximum height;
-- the per-species table, with relative density, relative dominance (and relative frequency and the IVI when several plots are analysed together);
-- density and basal area by DBH class and species, with the cutoffs you set;
-- the diameter distribution in regular classes (width configurable) with De Liocourt's quotient $q$, reported without interpretation;
-- the Holdridge complexity index for DBH > 2.5 cm and DBH > 10 cm;
-- charts of species composition by basal area (pie or treemap), DBH classes by density or basal area, and height.
-
-Exports: PDF report, Excel tables (summary, per species, DBH classes, data, issues) and a per-species CSV.
+- **Summary panel.** One view of the plot: mean DBH with the DBH classes, height (mean ± SD and canopy), live density with the share of each species, total basal area (live solid, dead hatched, by species), mortality in stems and in basal area, Holdridge index. Hovering shows the values. Light or dark theme; download as PNG (chosen DPI) or PDF.
+- **Structure.** Cards in the order DBH, mean height ± SD, canopy height, live density, live basal area, then total basal area, mortality, stems per tree, Holdridge indices and number of species. Density as stems per hectare or number of stems. Table by genus with the share (%) next to each value.
+- **Phytosociology.** Relative density (RD%), relative dominance (RDo%) and, with several plots, relative frequency (RF%) and IVI, with the definitions under the table; option to show each value as a 100% column split by species. Basal area composition.
+- **DBH classes.** Density or basal area by class and species, absolute or 100%; histogram; regular classes with De Liocourt's quotient.
+- **Height and profile.** Height × DBH with a linear regression per species; choose the species and read the equations beside the chart. Vertical profile as circles (size = DBH, with a size legend), stems, strata by height class or distribution by species.
+- **Map, Data check, Export** (PDF report with the data check at the end, Excel, CSV).
 
 ## Multiple plots
 
-Upload an Excel file with one sheet per plot. Fill the form in the sidebar (area cell, default area, cutoffs, plots to analyse) and click run. The plot name is the sheet name.
+Upload an Excel file with one sheet per plot, fill the sidebar form and click run.
 
-The page compares the plots on any structural metric, shows species composition per plot, and computes the IVI with the plots as sampling units (frequency is the share of plots where the species occurs). Sheets with no usable data are listed and skipped.
-
-Exports: PDF report, Excel (one sheet per plot) and CSV of the comparison and of the species data.
+- **Comparison.** Normalised profile of the plots (each parameter divided by its maximum), then a free chart: one parameter (box plot or violin of the stems for DBH and height, columns or line for the others), dual axis (second axis as line with markers or markers only) or X × Y. Table of parameters per plot in the lab order, with the share of each species (live and dead) in density or basal area.
+- **Species per plot.** Contribution of each species per plot, live solid and dead hatched, stacked or 100%, in basal area or density (per hectare or number of stems).
+- **IVI (all plots)**, with the plots as sampling units. **Map, Data check, Export.**
 
 ## Temporal analysis
 
-Upload an Excel file with one sheet per survey of the same plot. The year of each sheet is detected from its name; confirm or correct it. If two sheets receive the same year, the data-check panel reports `duplicate_year` and the values for that year are averaged, both in the series of the whole plot and in the per-species series.
+Upload one Excel file per plot, each sheet one survey (year). The year comes from the sheet name; years not found must be typed, and all of them can be checked in "Check the years of the sheets".
 
-The page plots the structural parameters over the years, in separate panels or on two axes, and the per-species series (as lines or areas) for the metric you choose.
-
-Exports: PDF report, Excel (including the per-species series) and CSV.
+- **Evolution.** Any plot parameter over the years (DBH, heights, live, dead and total density and basal area, counts, mortality, Holdridge, richness, each DBH class, stems without DBH), as lines or columns, in separate charts or on two axes. With several plots: one line per plot or mean ± SD.
+- **By species.** Any species parameter (density and basal area live, dead and total, shares, DBH, heights, RD, RDo), opening on live + dead basal area (dead hatched). Lines, columns, stacked or 100% stacked, with optional values. With several plots: plots side by side, one species with the plots side by side, the difference between two plots, the mean, or one plot. The table under the chart shows the same data and says which.
+- **Mortality.** Mortality in stems and in basal area, live and dead by species, and the number of stems without DBH in each year.
+- **Full series, Data check, Export.**
+- Years without a survey: columns are placed side by side by default; "Leave space for years without a survey" puts the gaps back.
 
 ## Reading the results
 
 - Per-hectare values are scaled from the plot area, so a wrong area changes every value.
 - A single plot has no frequency. Use several plots for the IVI.
-- Stems whose species could not be resolved count in density and basal area but not in richness or IVI. They appear as "Unidentified" in the DBH-class tables and the composition charts, and are not listed in the phytosociology table, which holds identified species only.
-- Heights come from live stems only. Canopy height is the mean of the 10 tallest live heights, which is an adaptation described in [methods.md](methods.md#6-decisions-and-adaptations).
+- Stems whose species could not be resolved count in density and basal area but not in richness or IVI.
+- Heights come from live stems only. Canopy height is the mean of the 10 tallest live heights ([methods.md](methods.md#6-decisions-and-adaptations)).
+- Stems without DBH are left out of density and basal area ([methods.md](methods.md#8-values-added-in-version-110)).
 
 ## Troubleshooting
 
-- *Header not found.* The sheet must have a row that holds tree identifier, species, DBH and condition columns within its first 25 rows. Check the column names against [data-format.md](data-format.md#columns).
+- *Header not found.* The sheet must have a row with tree identifier, species, DBH and condition within its first 25 rows; compare with the data template.
 - *Many unknown species.* Check the region, or add the aliases you use to the species table.
 - *Area warning.* Add an area label and value to the sheet header, or give the area cell in the sidebar.
-- *PDF unavailable.* The app shows the reason in place of the download button; the Excel and CSV exports still work.
+- *A change does not show up (running from source).* Install the package in editable mode (`pip install -e .`) and restart the app.

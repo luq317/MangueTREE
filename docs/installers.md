@@ -12,7 +12,7 @@ The workflow `.github/workflows/build-desktop.yml` builds both applications on G
 2. Open the **Actions** tab, select **Build MangueTREE (desktop)** and click **Run workflow**.
 3. After about 10 minutes, download the artifacts from the run page: `MangueTREE-Windows.zip` and `MangueTREE-macOS.zip`.
 
-When you push a tag that starts with `v` (for example `v1.0.0`), the workflow also creates a GitHub Release with both files attached.
+When you push a tag that starts with `v` (for example `v1.1.0`), the workflow also creates a GitHub Release with both files attached. The text of the release is taken from the section of that version in `CHANGELOG.md`.
 
 ## Option 2: Local build
 

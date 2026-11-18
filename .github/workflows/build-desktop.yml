@@ -11,7 +11,25 @@ permissions:
   contents: write
 
 jobs:
+  # Creates the release with the text of this version in CHANGELOG.md (tags only)
+  notes:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## \[/{p=index($0,"["v"]")>0;next} p' CHANGELOG.md > notes.md
+          test -s notes.md || echo "MangueTREE $GITHUB_REF_NAME" > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: MangueTREE ${{ github.ref_name }}
+          body_path: notes.md
+
   windows:
+    needs: notes
+    if: ${{ !failure() && !cancelled() }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +56,8 @@ jobs:
           files: MangueTREE-Windows.zip
 
   macos:
+    needs: notes
+    if: ${{ !failure() && !cancelled() }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

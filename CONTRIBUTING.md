@@ -10,7 +10,7 @@ cd MangueTREE
 python -m venv .venv
 source .venv/bin/activate        # on Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pip install -e ".[test]"
+pip install -e ".[test]"   # editable install; without -e the app keeps reading an old copy
 ```
 
 Python 3.11 or newer is required. The PDF tests use `pdftotext` (package `poppler-utils` on Linux, `brew install poppler` on macOS).

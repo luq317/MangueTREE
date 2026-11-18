@@ -11,10 +11,12 @@ MangueTREE is a Python engine and a Streamlit app for the structural and phytoso
 - Holdridge complexity index, computed for DBH > 2.5 cm and DBH > 10 cm.
 - DBH classes with user-defined cutoffs, and regular diameter classes with De Liocourt's quotient.
 - Multiple plots: spatial comparison and IVI with the plots as sampling units.
-- Time series: one plot surveyed over the years, with per-species series.
+- Time series: plots surveyed over the years (one workbook per plot, several together), every plot and species parameter, live and dead by species with the dead part hatched, comparison between plots.
+- Summary panel of a plot, interactive, downloadable as PNG or PDF.
 - Data validation before the analysis, with a report of every issue found and the action taken.
-- Exports: PDF reports, Excel tables and CSV files.
-- Interface and exports in English and Portuguese.
+- Exports: PDF reports, Excel tables, CSV files and every figure of a tab as PNG (ZIP, chosen DPI).
+- Data template (Portuguese or English, Excel or CSV) on the home page.
+- Interface and exports in Portuguese and English.
 - Species table for the Neotropics (ten taxa, four regions) that users can edit and extend.
 
 ## Download
@@ -42,7 +44,8 @@ MangueTREE needs Python 3.11 or newer.
 git clone https://github.com/luq317/MangueTREE.git
 cd MangueTREE
 pip install -r requirements.txt
-pip install -e .
+pip uninstall -y manguetree   # requirements.txt installs a fixed copy; replace it
+pip install -e .               # editable: the app reads your working copy
 ```
 
 How the desktop builds are made is described in [docs/installers.md](docs/installers.md).
@@ -106,13 +109,13 @@ The `data/` folder holds permanent-plot data from the Guaratiba mangrove (Rio de
 
 The software has no DOI yet; it will be added here after the Zenodo release. Until then, cite:
 
-> Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.0.1. https://github.com/luq317/MangueTREE
+> Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.1.0. https://github.com/luq317/MangueTREE
 
 ```bibtex
 @software{pereira2026manguetree,
   author  = {Pereira, Lucas Silva and Motta, Laiza Lacerda and Matta, Tatiane Costa da and Chaves, Filipe de Oliveira and Soares, M{\'a}rio Luiz Gomes},
   title   = {{MangueTREE: structural and phytosociological analysis of mangrove forest plots}},
-  version = {1.0.1},
+  version = {1.1.0},
   year    = {2026},
   url     = {https://github.com/luq317/MangueTREE}
 }

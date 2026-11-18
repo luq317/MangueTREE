@@ -2,16 +2,38 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [1.0.1] - 2026-11-19
+## [1.1.0] - 2026-11-18
 
-### Fixed
+Large update made with the NEMA/UERJ laboratory. Laiza Lacerda Motta joins the authors.
 
-- The abbreviation `Av` is read as *Avicennia schaueriana* in every region, the convention of the NEMA/UERJ field sheets (`AV`, `RH`, `LG`). In 1.0.0 it was reported as an ambiguous species, which removed those stems from richness and the importance values. *A. germinans* is written `Ag`.
-- Chart axes show full numbers with thousands separators (10.000 in Portuguese, 10,000 in English) instead of SI abbreviations such as 10k. The decimal separator of the charts follows the interface language.
+### Added
+
+- Interface opens in Portuguese, with a flag selector (Portuguese / English) and a translated page menu.
+- MangueTREE icon set (drawn from the logo) in the menu, tabs and headings, in place of emoji.
+- Data check moved to its own tab (before Export) on every analysis page, with a one-line summary above the tabs.
+- Single plot: interactive summary panel (values on hover; light or dark; PNG or PDF download); vertical profile as circles (default, with a size legend), stems, strata or distribution by species; species selection for the height × DBH regression with the equations beside the chart; RD%, RDo%, RF% and IVI explained under the table; 100% option for DBH classes and phytosociology; share (%) next to each value in the table by genus.
+- Multiple plots: free chart (box plot, violin, columns or line; dual axis with line or markers; X × Y) opening on DBH; explanation of the normalised profile; share of each species (live and dead) in the parameter table; species chart with stacked or 100% columns and dead part hatched.
+- Temporal: several workbooks (one per plot) analysed together, one line per plot or mean ± SD; every plot parameter (DBH, heights, live, dead and total density and basal area, counts, mortality in stems and basal area, Holdridge, richness, each DBH class, stems without DBH); every species parameter (density and basal area live, dead and total, shares, DBH, heights, RD, RDo); live + dead by species with the dead part hatched; plots side by side, one species with the plots side by side, and the difference between two plots; title above the tables saying what they show; columns side by side for years without a survey (option to keep the gaps).
+- Chart settings for the page (fonts, bar width, height) and an Adjust menu on each chart (height, bar width, Y limits).
+- Every figure of the open tab as PNG in one ZIP, at 150 to 600 DPI.
+- Data template on the home page (Portuguese or English; Excel with instructions and species codes, or CSV).
+- Densities as stems per hectare or number of stems in the plot.
+- Palettes MangueTREE (one colour per species), Lab (navy, teal, greys) and Greens; the chosen palette now recolours the species charts.
+- Download section in the README with direct links to the Windows and macOS builds; release notes taken from this changelog.
 
 ### Changed
 
-- Laiza Lacerda Motta added as author (CITATION.cff, README, citation text in the app and in the exports).
+- Parameters in the lab order (DBH, mean height, canopy height, live density, live basal area, species shares, number of species last) in cards, tables and selectors.
+- Structure cards smaller and of equal size; the height SD on the value line.
+- PDF reports start with the results; the data check closes the report.
+- MangueTREE seal in the lower right corner, outside the plotting area.
+- Selector titles in bold.
+
+### Fixed
+
+- `Av` is read as *Avicennia schaueriana* in every region, the convention of the NEMA/UERJ field sheets (`AV`, `RH`, `LG`); in 1.0.0 it was an ambiguous species and those stems left richness and the importance values. *A. germinans* is written `Ag`.
+- Chart axes show full numbers with thousands separators (10.000 / 10,000), never 10k; decimal separator follows the language.
+- Test of `requirements.txt` accepts the `.` line used by Streamlit Community Cloud (the GitHub tests failed since that change).
 
 ## [1.0.0] - 2026-11-13
 
