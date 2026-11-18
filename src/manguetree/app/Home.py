@@ -59,6 +59,20 @@ with st.expander(t("home.format_title")):
     st.caption(t("home.species_note"))
 
 st.markdown("---")
+ui.icon_heading(st, "relatorio", t("template.title"), 3)
+st.write(t("template.intro"))
+from manguetree import template as tpl
+tl_lang = st.radio(t("template.lang"), ("pt", "en"), horizontal=True, key="tpl_lang",
+                   index=0 if LANG == "pt" else 1,
+                   format_func=lambda c: f"{i18n.FLAGS[c]} {i18n.LANGUAGES[c]}")
+ct1, ct2 = st.columns(2)
+ct1.download_button(t("template.excel"), tpl.excel_bytes(tl_lang),
+                    file_name=f"MangueTREE_{'modelo' if tl_lang == 'pt' else 'template'}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+ct2.download_button(t("template.csv"), tpl.csv_bytes(tl_lang),
+                    file_name=f"MangueTREE_{'modelo' if tl_lang == 'pt' else 'template'}.csv", mime="text/csv")
+
+st.markdown("---")
 st.subheader(t("home.examples_title"))
 st.markdown(t("home.examples", repo=branding.REPO_URL))
 

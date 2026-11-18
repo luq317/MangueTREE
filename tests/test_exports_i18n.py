@@ -83,8 +83,10 @@ def test_seal_off_by_default(f2, monkeypatch):
     est = {"paleta": charts.PALETAS["default"]}
     fig = charts.fig_ivi(f2["importance"], est, "en")
     assert len(fig.layout.images) == 0
-    fig = charts.fig_ivi(f2["importance"], dict(est, seal=True), "en")
+    fig = charts.add_seal(charts.fig_ivi(f2["importance"], dict(est, seal=True), "en"))
     assert len(fig.layout.images) == 1
+    img = fig.layout.images[0]
+    assert img.y < 0 and img.xanchor == "right"        # below the axes, lower right corner
 
 
 def test_excel_sheet_names_follow_language(f2):

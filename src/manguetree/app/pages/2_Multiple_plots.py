@@ -49,8 +49,11 @@ paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="
                                     format_func=lambda c: ui.palette_label(c, LANG))
 ui.use_palette(paleta_nome)
 show_seal = ui.seal_checkbox(st.sidebar)
-estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": 14, "tamanho_eixos": 11,
-           "seal": show_seal}
+estilos = ui.style_controls(st.sidebar, "multi", paleta_nome, show_seal)
+ui.icon_heading(st.sidebar, "exportar", t("export.batch_title"), 3)
+_dpi_lote = st.sidebar.select_slider(t("export.batch_dpi"), (150, 300, 450, 600), value=300, key="dpi_lote_multi")
+ui.batch_png_button(st.sidebar, _dpi_lote, "MangueTREE_multi_figuras.zip")
+
 
 # --- Formulário: preencha tudo e clique UMA vez (sem apertar Enter em cada campo) ---
 with st.sidebar.form("cfg_multi"):
@@ -132,6 +135,7 @@ for res in resultados:
         "height_sd_m": r["height_sd_m"],
         "canopy_height_m": r["canopy_height_m"],
         "density_live_ha": r["density_live_ha"],
+        "n_live": r["n_live"],
         "ba_live_ha": r["ba_live_ha"],
     }
     shares = ui.species_shares(res, share_base)
@@ -156,8 +160,7 @@ with tabs[0]:
                  "ba_live_ha", "complexity_2_5", "n_species_live"]
     met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
     if len(df_param) >= 2 and len(met_radar) >= 3:
-        st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
-                        width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, ui.fig_radar(df_param, estilos, met_radar, LANG), "2_1", estilos)
         st.caption(t("multi.radar_note"))
         st.divider()
     base_params = [c for c in ui.metric_columns(df_param) if str(c).isidentifier()]
@@ -180,9 +183,8 @@ with tabs[0]:
         segunda = cb_.selectbox(t("multi.second_param"), base_params,
                                 index=min(1, len(base_params) - 1), key="metrica_multi_b",
                                 format_func=lambda c: ui.label(c, LANG))
-    st.plotly_chart(ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
-                                        kind=tipo_f, resultados=resultados, second_style=estilo_2),
-                    width="stretch", config=ui.PLOT_CONFIG)
+    ui.show(st, ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
+                                        kind=tipo_f, resultados=resultados, second_style=estilo_2), "2_2", estilos)
     if modo_f == "single" and tipo_f in ("box", "violin"):
         st.caption(t("multi.kind_note"))
     st.divider()
@@ -206,6 +208,14 @@ with tabs[1]:
                             format_func=lambda k: ui.condition_label(k, LANG))
     metrica_key = "area" if met_esp == "ba_ha" else "densidade"
     df_long = ui.dados_especies_parcelas(resultados, metrica=metrica_key)
+    y_lab = ui.label(met_esp, LANG)
+    if met_esp == "density_ha":
+        UN_m = st.radio(t("units.label"), ("ha", "count"), horizontal=True, key="units_multi",
+                        format_func=lambda k: t(f"units.{k}"))
+        if UN_m == "count":           # stems/ha back to stems in each plot
+            areas = {res["plot_name"]: res["summary"]["plot_area_m2"] for res in resultados}
+            df_long = df_long.assign(value=df_long["value"] * df_long["plot"].map(areas) / 10000.0)
+            y_lab = ui.label("n_stems", LANG)
     cs1, cs2 = st.columns([2, 1])
     with cs1:
         tipo_st = st.radio(t("temporal.chart"), ("stack", "stack100"), horizontal=True,
@@ -213,9 +223,9 @@ with tabs[1]:
     with cs2:
         val_st = st.checkbox(t("temporal.show_values"), value=False, key="val_st_multi")
     df_st = df_long if cond_esp == "both" else df_long[df_long["condition"] == cond_esp]
-    fig_st = ui.fig_species_plots_stacked(df_st, estilos, ui.label(met_esp, LANG), tipo_st, val_st, LANG)
+    fig_st = ui.fig_species_plots_stacked(df_st, estilos, y_lab, tipo_st, val_st, LANG)
     if fig_st:
-        st.plotly_chart(fig_st, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, fig_st, "2_3", estilos)
     else:
         st.warning(t("multi.no_data_combo"))
     # pivot table: plots in rows, components (species + L/D) in columns
@@ -244,7 +254,7 @@ with tabs[2]:
                      width="stretch")
         fig = ui.fig_ivi(ivi, estilos, LANG)
         if fig:
-            st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
+            ui.show(st, fig, "2_4", estilos)
 
 with tabs[3]:
     map_rows = []

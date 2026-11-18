@@ -65,11 +65,12 @@ ui.icon_heading(st.sidebar, "estilo", t("sidebar.style"))
 paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="pal_unica",
                                     format_func=lambda c: ui.palette_label(c, LANG))
 ui.use_palette(paleta_nome)
-tam_titulo = st.sidebar.slider(t("sidebar.title_font"), 10, 24, 14, key="tit_unica")
-tam_eixos = st.sidebar.slider(t("sidebar.axis_font"), 8, 20, 11, key="eix_unica")
 show_seal = ui.seal_checkbox(st.sidebar)
-estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": tam_titulo,
-           "tamanho_eixos": tam_eixos, "seal": show_seal}
+estilos = ui.style_controls(st.sidebar, "unica", paleta_nome, show_seal)
+ui.icon_heading(st.sidebar, "exportar", t("export.batch_title"), 3)
+_dpi_lote = st.sidebar.select_slider(t("export.batch_dpi"), (150, 300, 450, 600), value=300, key="dpi_lote_unica")
+ui.batch_png_button(st.sidebar, _dpi_lote, "MangueTREE_unica_figuras.zip")
+
 
 
 # ---------------- CARGA ----------------
@@ -152,10 +153,14 @@ with tabs[0]:
     st.subheader(t("single.structural"))
     # order asked by the lab: DBH, mean height, canopy, live density, live basal area;
     # every card has the same size (the SD sits on the value line, not below it)
+    UN = st.radio(t("units.label"), ("ha", "count"), horizontal=True, key="units_unica",
+                  format_func=lambda k: t(f"units.{k}"))
+    _dens_card = ((L("density_live_ha"), N(r["density_live_ha"], 0)) if UN == "ha"
+                  else (L("n_live"), f"{r['n_live']}"))
     cards = ((L("mean_dbh_cm"), N(r["mean_dbh_cm"], 2)),
              (L("height_mean_m"), f"{N(r['height_mean_m'], 2)} ± {N(r['height_sd_m'], 2)}"),
              (L("canopy_height_m"), N(r["canopy_height_m"], 2)),
-             (L("density_live_ha"), N(r["density_live_ha"], 0)),
+             _dens_card,
              (L("ba_live_ha"), N(r["ba_live_ha"], 2)),
              (L("ba_total_ha"), N(r["ba_total_ha"], 2)),
              (L("mortality_stems_pct"), N(r["mortality_stems_pct"], 1)),
@@ -184,8 +189,8 @@ with tabs[0]:
             continue
         resumo_gen.append({
             L("genus"): gen,
-            L("density_live_ha"): len(sub[sub["live"]]) * ft,
-            L("density_dead_ha"): len(sub[~sub["live"]]) * ft,
+            (L("density_live_ha") if UN == "ha" else L("n_live")): len(sub[sub["live"]]) * (ft if UN == "ha" else 1),
+            (L("density_dead_ha") if UN == "ha" else L("n_dead")): len(sub[~sub["live"]]) * (ft if UN == "ha" else 1),
             L("ba_live_ha"): sub[sub["live"]]["basal_area_m2"].sum() * ft,
             L("ba_dead_ha"): sub[~sub["live"]]["basal_area_m2"].sum() * ft,
         })
@@ -226,14 +231,14 @@ with tabs[1]:
         pct_f = st.checkbox(t("single.as_pct"), value=False, key="pct_fito")
         fig = ui.fig_phyto_100(ivi, estilos, LANG) if pct_f else ui.fig_ivi(ivi, estilos, LANG)
         if fig:
-            st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
+            ui.show(st, fig, "1_1", estilos)
     st.divider()
     st.subheader(t("single.ba_composition"))
     tipo = st.radio(t("single.chart_type"), ("pie", "treemap"), horizontal=True, key="tipo_ba_unica",
                     format_func=lambda k: t(f"single.chart_type.{k}", LANG))
     fig_c = ui.fig_composicao_ba(res, estilos, tipo, LANG)
     if fig_c:
-        st.plotly_chart(fig_c, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, fig_c, "1_2", estilos)
 
 # --- TAB 3: CLASSES DE DAP ---
 with tabs[2]:
@@ -242,9 +247,14 @@ with tabs[2]:
     metrica = st.radio(t("single.metric"), ("density", "basal_area"), horizontal=True, key="metrica_unica",
                        format_func=lambda k: t(f"metric.{k}", LANG))
     pct_c = st.checkbox(t("single.as_pct"), value=False, key="pct_classes")
-    fig_cl = ui.fig_classes_dap(res["dbh_density"], res["dbh_ba"], estilos, metrica, LANG, pct=pct_c)
+    UN_c = st.radio(t("units.label"), ("ha", "count"), horizontal=True, key="units_classes",
+                    format_func=lambda k: t(f"units.{k}")) if metrica == "density" and not pct_c else "ha"
+    dens_cl = res["dbh_density"] if UN_c == "ha" else res["dbh_density"] * (area_final / 10000.0)
+    fig_cl = ui.fig_classes_dap(dens_cl, res["dbh_ba"], estilos, metrica, LANG, pct=pct_c)
+    if fig_cl is not None and UN_c == "count":
+        fig_cl.update_layout(yaxis_title=ui.label("n_live", LANG))
     if fig_cl:
-        st.plotly_chart(fig_cl, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, fig_cl, "1_3", estilos)
     c1_, c2_ = st.columns(2)
     with c1_:
         st.caption(ui.label("density_ha", LANG))
@@ -257,7 +267,7 @@ with tabs[2]:
     st.divider()
     fig_h = ui.fig_hist_dap(res, estilos, LANG)
     if fig_h:
-        st.plotly_chart(fig_h, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, fig_h, "1_4", estilos)
 
     st.divider()
     st.subheader(t("single.diameter_q"))
@@ -265,7 +275,7 @@ with tabs[2]:
     info = res["diameter_info"]
     fig_j = ui.fig_distribuicao_diametrica(dist, estilos, LANG)
     if fig_j is not None:
-        st.plotly_chart(fig_j, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, fig_j, "1_5", estilos)
         cq1, cq2 = st.columns([2, 1])
         with cq1:
             st.dataframe(ui.for_display(dist, lang=LANG).style.format({
@@ -289,7 +299,7 @@ with tabs[3]:
     fig_s, det = ui.fig_altura_dap(res, estilos, LANG, species=esp_sel)
     if fig_s:
         cg_, cd_ = st.columns([3, 2])
-        cg_.plotly_chart(fig_s, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(cg_, fig_s, "1_6", estilos)
         if det:
             with cd_:
                 st.markdown("**" + t("single.regression_details") + "**")
@@ -307,7 +317,7 @@ with tabs[3]:
                                     key="perfil_largura") if kind == "strata" else 1.0
     fig_p = ui.fig_perfil_vertical(res, estilos, LANG, kind=kind, strata_width=largura_h)
     if fig_p:
-        st.plotly_chart(fig_p, width="stretch", config=ui.PLOT_CONFIG)
+        ui.show(st, fig_p, "1_7", estilos)
     else:
         st.info(t("single.no_profile"))
 

@@ -112,22 +112,42 @@ def _layout(fig, estilos, titulo=None):
         legend_title_text="", margin=dict(t=46, r=24, b=58, l=62),
         separators=",." if _lang() == "pt" else ".,",              # decimal, thousands
     )
+    if estilos.get("bar_width"):
+        fig.update_layout(bargap=1 - float(estilos["bar_width"]))
+    if estilos.get("height") and not fig.layout.height:
+        fig.update_layout(height=int(estilos["height"]))
     eixo = dict(showline=True, linewidth=0.8, linecolor="#5F726A", zeroline=False,
                 ticks="outside", tickcolor="#5F726A", ticklen=4,
                 tickfont=dict(size=10), title_font=dict(size=tam_e),
                 exponentformat="none", separatethousands=True)     # 10.000, never 10k
     fig.update_xaxes(showgrid=False, **eixo)
     fig.update_yaxes(showgrid=False, **eixo)
-    if not estilos.get("seal"):         # the seal is opt-in (sidebar checkbox)
+    # the seal (opt-in, sidebar checkbox) is placed by add_seal once the final size and
+    # margins are known, in the lower right corner outside the plotting area
+    fig.update_layout(meta={"mt_seal": bool(estilos.get("seal"))})
+    return fig
+
+
+def add_seal(fig):
+    """MangueTREE seal in the lower right corner, below the chart (outside the axes)."""
+    meta = fig.layout.meta or {}
+    if not (isinstance(meta, dict) and meta.get("mt_seal")):
         return fig
+    h = fig.layout.height or 450
+    m = fig.layout.margin
+    mt, mb = (m.t if m.t is not None else 46), (m.b if m.b is not None else 58)
+    extra = 38
+    fig.update_layout(height=h + extra, margin=dict(b=mb + extra))
+    plot_h = max(h + extra - mt - mb - extra, 50)
+    y = -(mb + extra - 4) / plot_h          # paper units: just above the bottom edge
     uri = _selo_uri()
     if uri:
-        fig.add_layout_image(dict(source=uri, xref="paper", yref="paper",
-                             x=1.0, y=-0.02, sizex=0.11, sizey=0.11,
-                             xanchor="right", yanchor="top", layer="above", opacity=0.95))
+        fig.add_layout_image(dict(source=uri, xref="paper", yref="paper", x=1.0, y=y,
+                                  sizex=0.09, sizey=30 / plot_h, xanchor="right", yanchor="bottom",
+                                  layer="above", opacity=0.9))
     else:
-        fig.add_annotation(text=marca.SELO_TEXTO, xref="paper", yref="paper",
-                           x=1.0, y=-0.18, showarrow=False, xanchor="right",
+        fig.add_annotation(text=marca.SELO_TEXTO, xref="paper", yref="paper", x=1.0, y=y,
+                           showarrow=False, xanchor="right", yanchor="bottom",
                            font=dict(size=9, color="#9AA7A0"))
     return fig
 
@@ -1499,3 +1519,107 @@ def fig_plot_difference(df_esp, estilos, plot_a, plot_b, metric, lang=None, gaps
     fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0, xanchor="left",
                                   font=dict(size=10)), margin=dict(b=110))
     return _year_axis(fig, pd.DataFrame({"year": years}), gaps)
+
+
+# ---------------------------------------------------------------------------
+# v1.1.0: chart style for the page, per-chart fine tuning, batch PNG export
+# ---------------------------------------------------------------------------
+def style_controls(container, page, paleta_nome, show_seal):
+    """Sidebar sliders that set the look of every chart of the page; returns ``estilos``."""
+    T = i18n.t
+    with container.expander(T("style.more"), expanded=False):
+        tt = st_slider(T("sidebar.title_font"), 10, 24, 14, f"tit_{page}")
+        ta = st_slider(T("sidebar.axis_font"), 8, 20, 11, f"eix_{page}")
+        bg = st_slider(T("style.bar_width"), 10, 100, 80, f"bar_{page}", T("style.bar_width_help"))
+        hh = st_slider(T("style.height"), 300, 900, 450, f"alt_{page}", step=10)
+    return {"paleta": PALETAS[paleta_nome], "tamanho_titulo": tt, "tamanho_eixos": ta,
+            "seal": show_seal, "bar_width": bg / 100.0, "height": hh}
+
+
+def st_slider(label_, lo, hi, default, key, help_=None, step=1):
+    import streamlit as st
+    return st.slider(label_, lo, hi, default, key=key, help=help_, step=step)
+
+
+def show(container, fig, key, estilos=None):
+    """Draw ``fig`` with a small "Ajustar" menu above it (bar width, y limits, height of
+    this chart only). The page-wide defaults come from ``estilos``."""
+    import streamlit as st
+    if fig is None:
+        return
+    T = i18n.t
+    estilos = estilos or {}
+    has_bars = any(getattr(tr, "type", "") == "bar" for tr in fig.data)
+    with container.popover(T("chart.adjust"), icon=":material/tune:"):
+        h = st.number_input(T("style.height"), 200, 1600, int(estilos.get("height") or fig.layout.height or 450),
+                            step=10, key=f"adjh_{key}")
+        bw = st.slider(T("style.bar_width"), 10, 100, int(100 * estilos.get("bar_width", 0.8)),
+                       key=f"adjb_{key}") if has_bars else None
+        c1, c2 = st.columns(2)
+        ymin = c1.text_input(T("style.ymin"), "", key=f"adjy0_{key}")
+        ymax = c2.text_input(T("style.ymax"), "", key=f"adjy1_{key}")
+    fig.update_layout(height=h)
+    if bw is not None:
+        fig.update_layout(bargap=1 - bw / 100.0)
+
+    def _f(txt):
+        try:
+            return float(str(txt).replace(",", "."))
+        except ValueError:
+            return None
+    lo, hi = _f(ymin), _f(ymax)
+    if lo is not None or hi is not None:          # None keeps that end automatic
+        fig.update_layout(yaxis_range=[lo, hi], yaxis_autorange=None)
+    add_seal(fig)
+    container.plotly_chart(fig, width="stretch", config=PLOT_CONFIG, key=f"fig_{key}")
+
+
+_ZIP_JS = r"""
+const CRC=(()=>{let t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zip(files){const enc=new TextEncoder();let parts=[],central=[],off=0;
+ for(const f of files){const name=enc.encode(f.name),d=f.data,crc=crc32(d);
+  const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint32(14,crc,true);
+  h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,name.length,true);
+  parts.push(new Uint8Array(h.buffer),name,d);
+  const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);
+  c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,name.length,true);c.setUint32(42,off,true);
+  central.push(new Uint8Array(c.buffer),name);off+=30+name.length+d.length}
+ const size=central.reduce((s,a)=>s+a.length,0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);
+ e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,size,true);e.setUint32(16,off,true);
+ return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/zip'})}
+async function png(gd,scale){const w=gd._fullLayout.width,h=gd._fullLayout.height;const cv=document.createElement('canvas');
+ cv.width=Math.round(w*scale);cv.height=Math.round(h*scale);const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+ for(const svg of gd.querySelectorAll('svg.main-svg')){const s=svg.cloneNode(true);s.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  s.setAttribute('width',w);s.setAttribute('height',h);const img=new Image();
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(new XMLSerializer().serializeToString(s));await img.decode();
+  ctx.drawImage(img,0,0,cv.width,cv.height)}
+ return new Uint8Array(await (await new Promise(r=>cv.toBlob(r,'image/png'))).arrayBuffer())}
+document.getElementById('go').onclick=async()=>{const st=document.getElementById('st');
+ const doc=window.parent.document;let panel=[...doc.querySelectorAll('[role="tabpanel"]')].find(p=>p.offsetParent!==null&&!p.hidden)||doc;
+ const plots=[...panel.querySelectorAll('.js-plotly-plot')].filter(g=>g.offsetParent!==null&&g._fullLayout);
+ if(!plots.length){st.textContent=MSG_NONE;return}
+ st.textContent=MSG_WORK;const files=[];let i=1;
+ for(const gd of plots){let t=(gd._fullLayout.title&&gd._fullLayout.title.text)||('figura_'+i);
+  t=t.replace(/<[^>]+>/g,'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
+  files.push({name:String(i).padStart(2,'0')+'_'+t+'.png',data:await png(gd,SCALE)});i++}
+ const a=document.createElement('a');a.href=URL.createObjectURL(zip(files));a.download=ZIPNAME;document.body.appendChild(a);a.click();
+ st.textContent=MSG_DONE.replace('{n}',files.length)};
+"""
+
+
+def batch_png_button(container, dpi, zip_name="MangueTREE_figuras.zip"):
+    """Button that saves every chart of the open tab as PNG (at ``dpi``) in one ZIP.
+    The charts are drawn in the browser, so no extra program is needed."""
+    import json
+    import streamlit.components.v1 as components
+    T = i18n.t
+    js = (_ZIP_JS.replace("SCALE", str(dpi / 96.0)).replace("ZIPNAME", json.dumps(zip_name))
+          .replace("MSG_NONE", json.dumps(T("export.batch_none"))).replace("MSG_WORK", json.dumps(T("export.batch_work")))
+          .replace("MSG_DONE", json.dumps(T("export.batch_done"))))
+    html = (f'<body style="margin:0;font-family:Source Sans Pro,Arial,sans-serif">'
+            f'<button id="go" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2E8B57;'
+            f'background:#fff;color:#1F4D3A;font-weight:600;cursor:pointer">{T("export.batch_button")}</button>'
+            f'<div id="st" style="font-size:12px;color:#5F726A;margin-top:4px"></div><script>{js}</script></body>')
+    with container:
+        components.html(html, height=70)

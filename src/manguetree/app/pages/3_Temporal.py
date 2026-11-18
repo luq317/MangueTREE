@@ -70,8 +70,10 @@ paleta_nome = st.sidebar.selectbox(t("sidebar.palette"), list(ui.PALETAS), key="
                                     format_func=lambda c: ui.palette_label(c, LANG))
 ui.use_palette(paleta_nome)
 show_seal = ui.seal_checkbox(st.sidebar)
-estilos = {"paleta": ui.PALETAS[paleta_nome], "tamanho_titulo": 14, "tamanho_eixos": 11,
-           "seal": show_seal}
+estilos = ui.style_controls(st.sidebar, "temp", paleta_nome, show_seal)
+ui.icon_heading(st.sidebar, "exportar", t("export.batch_title"), 3)
+_dpi_lote = st.sidebar.select_slider(t("export.batch_dpi"), (150, 300, 450, 600), value=300, key="dpi_lote_temp")
+ui.batch_png_button(st.sidebar, _dpi_lote, "MangueTREE_temp_figuras.zip")
 selecionadas = {}
 for nome, abas in abas_por_arquivo.items():
     up = arquivos[nome]
@@ -248,8 +250,7 @@ with tabs[0]:
             ca, cb = st.columns(2)
             for col, p in ((ca, a), (cb, b)):
                 if p:
-                    col.plotly_chart(ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG, GAPS),
-                                     width="stretch", config=ui.PLOT_CONFIG)
+                    ui.show(col, ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG, GAPS), f"evol_{p}", estilos)
     else:
         st.caption(t("temporal.dual_hint"))
         cE, cD = st.columns(2)
@@ -263,8 +264,7 @@ with tabs[0]:
                                   key="eixo_dir", format_func=lambda c: ui.label(c, LANG))
         base = serie_media if MULTI else df_serie
         if esq and dire:
-            st.plotly_chart(ui.fig_temporal_multi(base, estilos, esq, dire, LANG),
-                            width="stretch", config=ui.PLOT_CONFIG)
+            ui.show(st, ui.fig_temporal_multi(base, estilos, esq, dire, LANG), "3_2", estilos)
         else:
             st.info(t("temporal.pick_each_axis"))
 
@@ -306,18 +306,17 @@ with tabs[1]:
                 pb = d2.selectbox(t("temporal.plot_b"), PLOTS, index=min(1, len(PLOTS) - 1), key="dif_b")
                 f1 = ui.fig_plot_difference(df_esp, estilos, pa, pb, met_e, LANG, GAPS)
             if f1:
-                st.plotly_chart(f1, width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_cmp")
+                ui.show(st, f1, "fig_esp_cmp", estilos)
         elif escolha == "__side__":
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
-            st.plotly_chart(ui.fig_species_by_plot_panels(df_esp, estilos, met_e, tipo, valores, LANG, GAPS),
-                            width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_lado")
+            ui.show(st, ui.fig_species_by_plot_panels(df_esp, estilos, met_e, tipo, valores, LANG, GAPS), "fig_esp_lado", estilos)
         elif escolha == "__mean__":
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
         else:
             base_e = df_esp[df_esp["plot"] == escolha]
         fig_e = None if escolha in ("__side__", "__one__", "__diff__") else ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG, GAPS)
         if fig_e:
-            st.plotly_chart(fig_e, width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_temp")
+            ui.show(st, fig_e, "fig_esp_temp", estilos)
         # the table below shows the same data as the chart, and says so
         cols_tab = list(ui.LIVE_DEAD_METRICS[met_e][:2]) if met_e in ui.LIVE_DEAD_METRICS else [met_e]
         if escolha == "__one__":
@@ -355,10 +354,8 @@ with tabs[2]:
     st.subheader(t("temporal.mortality"))
     GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_mort")
     ca, cb = st.columns(2)
-    ca.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_stems_pct", VIEW, "line", LANG, GAPS),
-                    width="stretch", config=ui.PLOT_CONFIG)
-    cb.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_ba_pct", VIEW, "line", LANG, GAPS),
-                    width="stretch", config=ui.PLOT_CONFIG)
+    ui.show(ca, ui.fig_series(df_serie, estilos, "mortality_stems_pct", VIEW, "line", LANG, GAPS), "3_6", estilos)
+    ui.show(cb, ui.fig_series(df_serie, estilos, "mortality_ba_pct", VIEW, "line", LANG, GAPS), "3_7", estilos)
     st.markdown("#### " + t("temporal.mortality_species"))
     base_m = (df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
               if MULTI else df_esp)
@@ -367,7 +364,7 @@ with tabs[2]:
         f_ = (ui.fig_species_by_plot_panels(df_esp, estilos, met_, "stack", False, LANG, GAPS)
               if MULTI else ui.fig_species_series(base_m, estilos, met_, "stack", False, LANG, GAPS))
         if f_:
-            col_.plotly_chart(f_, width="stretch", config=ui.PLOT_CONFIG, key=f"mort_{met_}")
+            ui.show(col_, f_, f"mort_{met_}", estilos)
     st.caption(t("temporal.no_dbh_note"))
     cols_nd = ["plot", "year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"] if MULTI else \
         ["year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"]
