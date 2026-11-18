@@ -39,13 +39,6 @@ def test_species_shares_add_up():
     assert abs(sp["share_ba_dead_pct"].sum() - 100) < 1e-9
 
 
-def test_dynamics_rates():
-    r0, r1 = _two_years()
-    d = mc.dynamics(r0, r1, (2003, 2004))
-    assert d["survivors"] + d["deaths"] == d["live_trees_start"]
-    assert 0 <= d["mortality_rate_pct_yr"] <= 100
-
-
 def test_species_stack100_columns_sum_to_100():
     df = pd.DataFrame({"year": [2003, 2003, 2004, 2004], "species": ["A", "B", "A", "B"],
                        "density_live_ha": [30.0, 10.0, 5.0, 15.0]})
@@ -63,4 +56,18 @@ def test_temporal_page_with_two_plots():
     serie = at.session_state["temp_serie"]
     assert set(serie["plot"]) == {"H2", "H2b"}
     assert "height_mean_m" in serie.columns
-    assert at.session_state["temp_dyn"] is not None
+
+
+def test_live_dead_chart_hatches_the_dead_part():
+    df = pd.DataFrame({"year": [2003, 2004], "species": ["A", "A"],
+                       "density_live_ha": [30.0, 20.0], "density_dead_ha": [10.0, 5.0],
+                       "density_total_ha": [40.0, 25.0]})
+    fig = ui.fig_species_series(df, {"paleta": ["#000"]}, "live_dead_density", "stack")
+    shapes = [tr.marker.pattern.shape for tr in fig.data]
+    assert shapes == ["", "/"]
+    assert list(fig.data[0].x) == ["2003", "2004"]          # no gaps by default
+
+
+def test_dynamics_tab_is_gone():
+    src = (APP / "pages" / "3_Temporal.py").read_text(encoding="utf-8")
+    assert "dynamics" not in src

@@ -570,36 +570,3 @@ def species_parameters(res, canopy_n=10):
         rows.append(row)
     return pd.DataFrame(rows, columns=["species", *SPECIES_METRICS])
 
-
-def dynamics(res0, res1, years):
-    """Annual mortality and recruitment between two censuses of the same plot.
-
-    Trees are matched by ``tree_id`` (the tag): a tree is alive when it has at least one
-    live stem. Rates follow Sheil, Burslem & Alder (1995):
-        mortality   m = 1 - (S / N0) ** (1 / t)
-        recruitment r = 1 - (1 - R / N1) ** (1 / t)
-    with N0 and N1 the live trees in each census, S the trees alive in both and R the
-    trees alive in the second census that were not alive in the first; t in years.
-    Returns None when the censuses share no tag.
-    """
-    y0, y1 = years
-    t = float(y1 - y0)
-    def alive(res):
-        d = res["data"]
-        if "tree_id" not in d.columns:
-            return set()
-        ids = d.loc[d["live"] & d["tree_id"].notna(), "tree_id"].astype(str).str.strip()
-        return set(ids[ids != ""])
-    a0, a1 = alive(res0), alive(res1)
-    if t <= 0 or not a0 or not a1 or not (a0 & a1):
-        return None
-    n0, n1 = len(a0), len(a1)
-    surv, rec = len(a0 & a1), len(a1 - a0)
-    return {
-        "year_start": y0, "year_end": y1, "interval_years": t,
-        "live_trees_start": n0, "live_trees_end": n1, "survivors": surv,
-        "deaths": n0 - surv, "recruits": rec,
-        "mortality_rate_pct_yr": 100 * (1 - (surv / n0) ** (1 / t)),
-        "recruitment_rate_pct_yr": 100 * (1 - (1 - rec / n1) ** (1 / t)),
-        "net_change_pct_yr": 100 * ((n1 / n0) ** (1 / t) - 1),
-    }

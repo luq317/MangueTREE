@@ -1010,14 +1010,24 @@ def settings_signature():
 # ---------------------------------------------------------------------------
 # TEMPORAL v1.1.0: every parameter, several plots, stacked columns
 # ---------------------------------------------------------------------------
-def _year_axis(fig, df):
+def _year_axis(fig, df, gaps=False):
+    """Years on the x axis. ``gaps=False`` (lab convention): one column after the other,
+    with no empty space for years without a survey; ``gaps=True``: a time scale."""
     years = sorted(df["year"].dropna().unique())
-    fig.update_xaxes(tickmode="array", tickvals=years, ticktext=[str(int(y)) for y in years],
-                     tickangle=-45 if len(years) > 12 else 0)
+    if gaps:
+        fig.update_xaxes(type="linear", tickmode="array", tickvals=years,
+                         ticktext=[str(int(y)) for y in years])
+    else:
+        fig.update_xaxes(type="category", categoryorder="array",
+                         categoryarray=[str(int(y)) for y in years])
+        for tr in fig.data:
+            if getattr(tr, "x", None) is not None and not getattr(tr, "fill", None):
+                tr.x = [str(int(float(v))) for v in tr.x]
+    fig.update_xaxes(tickangle=-45 if len(years) > 12 else 0)
     return fig
 
 
-def fig_series(df, estilos, y, view="plots", chart="line", lang=None):
+def fig_series(df, estilos, y, view="plots", chart="line", lang=None, gaps=False):
     """One parameter over the years. With several plots: one trace per plot
     (``view="plots"``) or the mean with a band / error bars of one SD (``view="mean"``)."""
     lang = _lang(lang)
@@ -1049,14 +1059,59 @@ def fig_series(df, estilos, y, view="plots", chart="line", lang=None):
                                          line=dict(color=cores[i % len(cores)])))
         fig.update_layout(barmode="group", showlegend=len(plots) > 1)
     fig.update_layout(xaxis_title=label("year", lang), yaxis_title=label(y, lang))
-    return _year_axis(_layout(fig, estilos, label(y, lang)), df)
+    # the mean ± SD band needs a numeric axis
+    return _year_axis(_layout(fig, estilos, label(y, lang)), df,
+                      gaps=gaps or (view == "mean" and chart == "line" and len(plots) > 1))
 
 
-def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False, lang=None):
+LIVE_DEAD_METRICS = {"live_dead_density": ("density_live_ha", "density_dead_ha", "density_total_ha"),
+                     "live_dead_ba": ("ba_live_ha", "ba_dead_ha", "ba_total_ha")}
+
+
+def fig_species_live_dead(df_esp, estilos, metric, chart="stack", show_values=False, lang=None,
+                          gaps=False):
+    """Live (solid) and dead (hatched) of each species in the same column, stacked;
+    ``chart="stack100"`` shows each part as % of the year's total."""
+    if df_esp is None or df_esp.empty:
+        return None
+    lang = _lang(lang)
+    viva, morta, total = LIVE_DEAD_METRICS[metric]
+    df = df_esp.sort_values("year").copy()
+    tot = df.groupby("year")[total].transform("sum")
+    order = df.groupby("species")[total].mean().sort_values(ascending=False).index.tolist()
+    fig = go.Figure()
+    for cond, col, pattern in (("live", viva, ""), ("dead", morta, "/")):
+        for sp in order:
+            sub = df[df["species"] == sp]
+            vals = (100 * sub[col] / tot[sub.index]).where(tot[sub.index] > 0, 0.0) \
+                if chart == "stack100" else sub[col]
+            cor = mc.species_color(sp)
+            txt = [num(v, 0 if chart == "stack100" else 2, lang) for v in vals] if show_values else None
+            fig.add_trace(go.Bar(
+                x=sub["year"], y=vals, text=txt, textposition="inside",
+                name=f"{species_name(sp, lang)} · {i18n.t('condition.' + cond, lang)}",
+                marker=dict(color=cor if cond == "live" else "white", line=dict(color=cor, width=1.2),
+                            pattern=dict(shape=pattern, fgcolor=cor, size=6, solidity=0.35))))
+    fig.update_layout(barmode="stack", xaxis_title=label("year", lang),
+                      yaxis_title=label(total, lang) if chart != "stack100"
+                      else i18n.t("temporal.chart.stack100", lang) + " · " + label(total, lang))
+    if chart == "stack100":
+        fig.update_yaxes(range=[0, 100], ticksuffix="%")
+    fig = _layout(fig, estilos, i18n.t(f"temporal.metric.{metric}", lang))
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
+                      margin=dict(b=120))
+    return _year_axis(fig, df, gaps)
+
+
+def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False, lang=None,
+                       gaps=False):
     """A per-species parameter over the years: lines, grouped columns, stacked
     columns or 100% stacked columns (each year's column adds up to 100%)."""
     if df_esp is None or df_esp.empty:
         return None
+    if metric in LIVE_DEAD_METRICS:
+        return fig_species_live_dead(df_esp, estilos, metric, "stack100" if chart == "stack100"
+                                     else "stack", show_values, lang, gaps)
     lang = _lang(lang)
     df = df_esp.sort_values("year").copy()
     order = (df.groupby("species")[metric].mean().sort_values(ascending=False).index.tolist())
@@ -1088,4 +1143,4 @@ def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False,
     fig = _layout(fig, estilos, i18n.t("chart.by_species", lang, metric=label(metric, lang)))
     fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
                       margin=dict(b=110))
-    return _year_axis(fig, df)
+    return _year_axis(fig, df, gaps)

@@ -21,7 +21,7 @@ from manguetree.validation import Issue
 
 st.set_page_config(layout="wide", page_title=t("temporal.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "especies", "mortalidade", "dinamica",
+ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "especies", "mortalidade",
                                       "serie", "verificacao", "exportar"))
 ui.topo(t("temporal.title"), t("temporal.subtitle"))
 st.markdown(t("temporal.intro"))
@@ -59,7 +59,7 @@ MULTI = len(uploads) > 1
 # Results belong to the files they were computed from: a new upload clears them.
 _fid = tuple(sorted(getattr(u, "file_id", u.name) for u in uploads))
 if st.session_state.get("temp_file") != _fid:
-    for _k in ("temp_serie", "temp_esp", "temp_dyn", "temp_sig", "temp_issues",
+    for _k in ("temp_serie", "temp_esp", "temp_sig", "temp_issues",
                "temp_ignoradas", "pdf_temp", "pdf_sig_temp"):
         st.session_state.pop(_k, None)
     st.session_state["temp_file"] = _fid
@@ -160,7 +160,7 @@ if submitted or (st.session_state.get("temp_serie") is not None
             problemas[chave] = res["issues"]
 
     if len({r["year"] for r in resultados}) < 2:
-        for k in ("temp_serie", "temp_esp", "temp_dyn"):
+        for k in ("temp_serie", "temp_esp"):
             st.session_state.pop(k, None)
         st.error(t("temporal.need_two_years"))
         if ignoradas:
@@ -188,20 +188,8 @@ if submitted or (st.session_state.get("temp_serie") is not None
     df_esp[zero] = df_esp[zero].fillna(0.0)
     df_esp = df_esp.dropna(subset=["n_stems"])
     df_esp = df_esp[df_esp["n_stems"] > 0].reset_index(drop=True)
-    # dynamics between consecutive censuses of each plot (one sheet per year)
-    dyn = []
-    por_parcela = {}
-    for res in resultados:
-        por_parcela.setdefault(res["plot"], {}).setdefault(res["year"], res)
-    for p, anos in por_parcela.items():
-        ys = sorted(anos)
-        for y0, y1 in zip(ys, ys[1:]):
-            dd = mc.dynamics(anos[y0], anos[y1], (y0, y1))
-            if dd:
-                dyn.append({"plot": p, **dd})
     st.session_state["temp_serie"] = ui.integer_counts(df_serie)
     st.session_state["temp_esp"] = df_esp
-    st.session_state["temp_dyn"] = ui.integer_counts(pd.DataFrame(dyn))
     st.session_state["temp_ignoradas"] = ignoradas
     st.session_state["temp_issues"] = problemas
     st.session_state["temp_sig"] = cfg_sig
@@ -211,7 +199,6 @@ if df_serie is None:
     st.info(t("temporal.confirm_prompt"))
     st.stop()
 df_esp = st.session_state.get("temp_esp")
-df_dyn = st.session_state.get("temp_dyn")
 ignoradas = st.session_state.get("temp_ignoradas", {})
 if ignoradas:
     st.caption(t("sheets.ignored") + " " + ", ".join(
@@ -236,8 +223,9 @@ serie_media = df_serie.drop(columns="plot").groupby("year", as_index=False).mean
 params = [c for c in mc.metric_columns(df_serie)]
 
 tabs = st.tabs([t("temporal.tab.evolution"), t("temporal.tab.species"),
-                t("temporal.tab.mortality"), t("temporal.tab.dynamics"),
-                t("temporal.tab.series"), t("tab.check"), t("temporal.tab.export")])
+                t("temporal.tab.mortality"), t("temporal.tab.series"), t("tab.check"),
+                t("temporal.tab.export")])
+GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_temp")
 
 with tabs[0]:
     st.subheader(t("temporal.evolution"))
@@ -259,7 +247,7 @@ with tabs[0]:
             ca, cb = st.columns(2)
             for col, p in ((ca, a), (cb, b)):
                 if p:
-                    col.plotly_chart(ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG),
+                    col.plotly_chart(ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG, GAPS),
                                      width="stretch", config=ui.PLOT_CONFIG)
     else:
         st.caption(t("temporal.dual_hint"))
@@ -287,8 +275,9 @@ with tabs[1]:
         st.caption(t("temporal.species_hint"))
         c1_, c2_, c3_ = st.columns([2, 2, 1])
         with c1_:
-            met_e = st.selectbox(t("temporal.species_metric"), list(mc.SPECIES_METRICS),
-                                 index=list(mc.SPECIES_METRICS).index("density_live_ha"),
+            opcoes_e = list(ui.LIVE_DEAD_METRICS) + list(mc.SPECIES_METRICS)
+            met_e = st.selectbox(t("temporal.species_metric"), opcoes_e,
+                                 index=opcoes_e.index("density_live_ha"),
                                  key="met_esp_temp", format_func=lambda c: ui.label(c, LANG))
         with c2_:
             tipo = st.radio(t("temporal.chart"), ("line", "bar", "stack", "stack100"),
@@ -305,11 +294,19 @@ with tabs[1]:
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
         else:
             base_e = df_esp[df_esp["plot"] == escolha]
-        fig_e = ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG)
+        fig_e = ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG, GAPS)
         if fig_e:
             st.plotly_chart(fig_e, width="stretch", config=ui.PLOT_CONFIG)
-        piv = base_e.pivot_table(index="year", columns="species", values=met_e, aggfunc="mean")
-        piv.columns = [ui.species_name(c, LANG) for c in piv.columns]
+        # the table below shows the same data as the chart, and says so
+        cols_tab = list(ui.LIVE_DEAD_METRICS[met_e][:2]) if met_e in ui.LIVE_DEAD_METRICS else [met_e]
+        nome_parcela = t("temporal.all_plots_mean") if escolha == "__mean__" else escolha
+        st.markdown("**" + t("temporal.table_of", metric=ui.label(met_e, LANG),
+                             plot=nome_parcela) + "**")
+        piv = base_e.pivot_table(index="year", columns="species", values=cols_tab, aggfunc="mean")
+        if len(cols_tab) == 1:
+            piv.columns = [ui.species_name(sp, LANG) for _m, sp in piv.columns]
+        else:
+            piv.columns = [f"{ui.species_name(sp, LANG)} · {ui.label(m, LANG)}" for m, sp in piv.columns]
         piv.index.name = ui.label("year", LANG)
         st.dataframe(piv.style.format(lambda v: ui.num(v, 2, LANG), na_rep="-"), width="stretch")
         st.download_button(t("temporal.species_csv"),
@@ -320,39 +317,32 @@ with tabs[1]:
 with tabs[2]:
     st.subheader(t("temporal.mortality"))
     ca, cb = st.columns(2)
-    ca.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_stems_pct", VIEW, "line", LANG),
+    ca.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_stems_pct", VIEW, "line", LANG, GAPS),
                     width="stretch", config=ui.PLOT_CONFIG)
-    cb.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_ba_pct", VIEW, "line", LANG),
+    cb.plotly_chart(ui.fig_series(df_serie, estilos, "mortality_ba_pct", VIEW, "line", LANG, GAPS),
                     width="stretch", config=ui.PLOT_CONFIG)
+    st.markdown("#### " + t("temporal.mortality_species"))
+    base_m = (df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
+              if MULTI else df_esp)
+    cm1, cm2 = st.columns(2)
+    for col_, met_ in ((cm1, "live_dead_density"), (cm2, "live_dead_ba")):
+        f_ = ui.fig_species_series(base_m, estilos, met_, "stack", False, LANG, GAPS)
+        if f_:
+            col_.plotly_chart(f_, width="stretch", config=ui.PLOT_CONFIG)
     st.caption(t("temporal.no_dbh_note"))
     cols_nd = ["plot", "year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"] if MULTI else \
         ["year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"]
     st.dataframe(ui.for_display(df_serie[cols_nd], lang=LANG), hide_index=True, width="stretch")
 
 with tabs[3]:
-    st.subheader(t("temporal.dynamics"))
-    st.caption(t("temporal.dynamics_note"))
-    if df_dyn is None or df_dyn.empty:
-        st.info(t("temporal.dynamics_none"))
-    else:
-        dyn_plot = df_dyn.rename(columns={"year_end": "year"})
-        ca, cb = st.columns(2)
-        ca.plotly_chart(ui.fig_series(dyn_plot, estilos, "mortality_rate_pct_yr", VIEW, "bar", LANG),
-                        width="stretch", config=ui.PLOT_CONFIG)
-        cb.plotly_chart(ui.fig_series(dyn_plot, estilos, "recruitment_rate_pct_yr", VIEW, "bar", LANG),
-                        width="stretch", config=ui.PLOT_CONFIG)
-        _d = ui.for_display(df_dyn if MULTI else df_dyn.drop(columns="plot"), lang=LANG)
-        st.dataframe(_d.style.format(ui.format_by_dtype(_d)), hide_index=True, width="stretch")
-
-with tabs[4]:
     _tab = ui.for_display(df_serie if MULTI else df_serie.drop(columns="plot"), lang=LANG)
     _tab = _tab.set_index(([ui.label("plot", LANG)] if MULTI else []) + [ui.label("year", LANG)])
     st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
 
-with tabs[5]:
+with tabs[4]:
     ui.validation_panel(problemas, UNITS, key="mc_temp", lang=LANG)
 
-with tabs[6]:
+with tabs[5]:
     st.subheader(t("temporal.export"))
     # the PDF keeps the main parameters (mean of the plots when there are several)
     principais = [c for c in ("mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
@@ -392,9 +382,6 @@ with tabs[6]:
         if df_esp is not None and not df_esp.empty:
             ui.for_display(df_esp, lang=LANG).round(3).to_excel(
                 xls, sheet_name=t("sheet.by_species"), index=False)
-        if df_dyn is not None and not df_dyn.empty:
-            ui.for_display(df_dyn, lang=LANG).round(3).to_excel(
-                xls, sheet_name=t("temporal.tab.dynamics")[:31], index=False)
         df_problemas.to_excel(xls, sheet_name=t("sheet.issues"), index=False)
     buf.seek(0)
     with cc[1]:
