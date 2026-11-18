@@ -617,8 +617,7 @@ def single_plot_report(res, lang="en", seal=False):
     from manguetree import charts as ui
     T = _T(lang)
     H = lambda k: xml_escape(T(f"report.h.{k}"))
-    b = _bloco_verificacao(ui.issues_display_frame(res.get("issues", []), lang=lang), lang)
-    b += [("h", H("summary")), ("tab", ui.resumo_para_df(res, lang)),
+    b = [("h", H("summary")), ("tab", ui.resumo_para_df(res, lang)),
           ("cap", T("method.heights_live_only")),
           ("h", H("by_species")), ("tab", ui.tabela_por_especie(res, lang)),
           ("h", H("phyto")), ("tab", ui.for_display(res["importance"], lang=lang)),
@@ -636,6 +635,8 @@ def single_plot_report(res, lang="en", seal=False):
           ("fig", _fig_hist(res, lang, seal)),
           ("fig", _fig_alt_dap(res, lang, seal)),
           ("fig", _fig_perfil(res, lang, seal))]
+    # the data check closes the report: the results come first
+    b += _bloco_verificacao(ui.issues_display_frame(res.get("issues", []), lang=lang), lang)
     return _gerar(T("report.title.single"), str(res.get("plot_name") or ""), b, lang, seal)
 
 
@@ -644,10 +645,11 @@ def multiple_plots_report(resultados, df_param, ivi, df_especies, issues_df=None
     from manguetree import charts as ui
     T = _T(lang)
     H = lambda k: xml_escape(T(f"report.h.{k}"))
-    b = _bloco_verificacao(issues_df, lang)
     shown = ui.for_display(df_param, lang=lang)
-    b += [("h", H("comparison")), ("tab", shown.round(2))]
+    b = [("h", H("comparison")), ("tab", shown.round(2))]
     for col in mc.metric_columns(df_param):
+        if not str(col).isidentifier():      # species contributions stay in the table
+            continue
         b.append(("fig", _fig_barras(shown, ui.label("plot", lang), ui.label(col, lang), seal)))
     b += [("h", H("dbh_distribution")),
           ("fig", _fig_box(resultados, lang, seal)),
@@ -655,6 +657,7 @@ def multiple_plots_report(resultados, df_param, ivi, df_especies, issues_df=None
           ("fig", _fig_especies_parcelas(df_especies, lang, seal)),
           ("h", H("ivi")), ("tab", ui.for_display(ivi, lang=lang)),
           ("fig", _fig_ivi(ivi, lang, seal))]
+    b += _bloco_verificacao(issues_df, lang)
     return _gerar(T("report.title.multiple"), T("report.plots_count", n=len(resultados)),
                   b, lang, seal)
 
@@ -663,8 +666,7 @@ def temporal_report(df_serie, df_esp, issues_df=None, lang="en", seal=False):
     from manguetree import charts as ui
     T = _T(lang)
     H = lambda k: xml_escape(T(f"report.h.{k}"))
-    b = _bloco_verificacao(issues_df, lang)
-    b += [("h", H("series")),
+    b = [("h", H("series")),
           ("tab", ui.for_display(df_serie, lang=lang).round(2)), ("h", H("evolution"))]
     for col in mc.metric_columns(df_serie):
         b.append(("fig", _fig_serie(df_serie, col, lang, seal)))
@@ -674,6 +676,7 @@ def temporal_report(df_serie, df_esp, issues_df=None, lang="en", seal=False):
                     "ba_contribution_pct"]:
             if met in df_esp.columns:
                 b.append(("fig", _fig_serie_especie(df_esp, met, lang, seal)))
+    b += _bloco_verificacao(issues_df, lang)
     period = T("report.period", start=int(df_serie["year"].min()),
                end=int(df_serie["year"].max()))
     return _gerar(T("report.title.temporal"), period, b, lang, seal)
