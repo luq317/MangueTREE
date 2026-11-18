@@ -15,7 +15,7 @@ from manguetree.validation import validate
 
 st.set_page_config(layout="wide", page_title=t("single.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("estrutura", "fitossociologia", "classes_dap", "altura", "mapa", "verificacao", "exportar"))
+ui.sidebar_nav(st.sidebar, tab_icons=("inicio", "estrutura", "fitossociologia", "classes_dap", "altura", "mapa", "verificacao", "exportar"))
 ui.topo(t("single.title"), t("single.subtitle"))
 st.markdown(t("single.intro"))
 
@@ -118,8 +118,31 @@ r = res["summary"]
 
 # ---------------- DASHBOARD ----------------
 N = lambda value, decimals: ui.num(value, decimals, LANG)      # decimal comma in Portuguese
-tabs = st.tabs([t("single.tab.structure"), t("single.tab.phyto"), t("single.tab.classes"),
+tabs_all = st.tabs([t("single.tab.panel"), t("single.tab.structure"), t("single.tab.phyto"), t("single.tab.classes"),
                 t("single.tab.height"), t("single.tab.map"), t("tab.check"), t("single.tab.export")])
+tab_panel, tabs = tabs_all[0], tabs_all[1:]
+
+# --- PAINEL RESUMO ---
+with tab_panel:
+    from manguetree import dashboard as dash
+    cp1, cp2, cp3 = st.columns([1, 1, 1])
+    with cp1:
+        tema = st.radio(t("dashboard.theme"), ("light", "dark"), horizontal=True, key="tema_painel",
+                        format_func=lambda k: t(f"dashboard.theme.{k}"))
+    with cp2:
+        ano_p = st.text_input(t("dashboard.year"), "", key="ano_painel")
+    with cp3:
+        dpi_p = st.select_slider(t("dashboard.dpi"), (150, 200, 300, 450, 600), value=300, key="dpi_painel")
+    partes = ([t("dashboard.data_of", year=ano_p.strip())] if ano_p.strip() else []) + [
+        t("dashboard.subtitle", area=N(area_final, 0), n=r["n_species_live"])]
+    sub_p = " · ".join(partes)
+    cores_p = ui.species_colors(res["data"]["species_label"].unique())
+    st.image(dash.summary_panel(res, tema, LANG, cores_p, "png", 110, sub_p), width="stretch")
+    d1, d2 = st.columns(2)
+    d1.download_button(t("dashboard.png"), dash.summary_panel(res, tema, LANG, cores_p, "png", dpi_p, sub_p),
+                       file_name=f"MangueTREE_painel_{plot_name}.png", mime="image/png", type="primary")
+    d2.download_button(t("dashboard.pdf"), dash.summary_panel(res, tema, LANG, cores_p, "pdf", 300, sub_p),
+                       file_name=f"MangueTREE_painel_{plot_name}.pdf", mime="application/pdf")
 
 # --- TAB 1: ESTRUTURA ---
 with tabs[0]:
@@ -197,6 +220,7 @@ with tabs[1]:
                      width="stretch")
         if "ivi" not in ivi.columns:
             st.caption(t("method.ivi_needs_units"))
+        st.markdown(t("phyto.legend"))
         fig = ui.fig_ivi(ivi, estilos, LANG)
         if fig:
             st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
@@ -255,17 +279,29 @@ with tabs[2]:
 # --- TAB 4: ALTURA & PERFIL ---
 with tabs[3]:
     st.subheader(t("single.height_dbh"))
-    fig_s, det = ui.fig_altura_dap(res, estilos, LANG)
+    esp_disp = [s_ for s_ in res["data"].loc[res["data"]["live"], "species_label"].dropna().unique()]
+    esp_sel = st.multiselect(t("single.regression_species"), esp_disp, default=esp_disp,
+                             key="esp_regressao", format_func=lambda v: ui.species_name(v, LANG))
+    fig_s, det = ui.fig_altura_dap(res, estilos, LANG, species=esp_sel)
     if fig_s:
-        st.plotly_chart(fig_s, width="stretch", config=ui.PLOT_CONFIG)
+        cg_, cd_ = st.columns([3, 2])
+        cg_.plotly_chart(fig_s, width="stretch", config=ui.PLOT_CONFIG)
         if det:
-            with st.expander(t("single.regression_details")):
-                st.dataframe(pd.DataFrame(det), width="stretch")
+            with cd_:
+                st.markdown("**" + t("single.regression_details") + "**")
+                st.dataframe(pd.DataFrame(det), width="stretch", hide_index=True)
     else:
         st.warning(t("single.not_enough_height"))
     st.divider()
     st.subheader(t("single.vertical_profile"))
-    fig_p = ui.fig_perfil_vertical(res, estilos, LANG)
+    cpk, cpw = st.columns([3, 1])
+    with cpk:
+        kind = st.radio(t("single.profile_kind"), ui.PROFILE_KINDS, horizontal=True, key="perfil_tipo",
+                        format_func=lambda k: t(f"single.profile.{k}"))
+    with cpw:
+        largura_h = st.number_input(t("single.strata_width"), min_value=0.25, value=1.0, step=0.25,
+                                    key="perfil_largura") if kind == "strata" else 1.0
+    fig_p = ui.fig_perfil_vertical(res, estilos, LANG, kind=kind, strata_width=largura_h)
     if fig_p:
         st.plotly_chart(fig_p, width="stretch", config=ui.PLOT_CONFIG)
     else:

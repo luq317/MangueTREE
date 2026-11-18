@@ -17,7 +17,7 @@ from manguetree.i18n import t
 
 st.set_page_config(layout="wide", page_title=t("multi.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "fitossociologia", "especies", "mapa", "verificacao", "exportar"))
+ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "especies", "fitossociologia", "mapa", "verificacao", "exportar"))
 ui.topo(t("multi.title"), t("multi.subtitle"))
 st.markdown(t("multi.intro"))
 st.caption(t("multi.see_temporal"))
@@ -129,6 +129,7 @@ for res in resultados:
         "plot_area_m2": r["plot_area_m2"],
         "mean_dbh_cm": r["mean_dbh_cm"],
         "height_mean_m": r["height_mean_m"],
+        "height_sd_m": r["height_sd_m"],
         "canopy_height_m": r["canopy_height_m"],
         "density_live_ha": r["density_live_ha"],
         "ba_live_ha": r["ba_live_ha"],
@@ -146,48 +147,50 @@ for res in resultados:
     linhas.append(linha)
 df_param = ui.integer_counts(pd.DataFrame(linhas))      # internal column names; shown through ui.for_display
 
-tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.ivi"),
-                t("multi.tab.species"), t("multi.tab.map"), t("tab.check"), t("multi.tab.export")])
+tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.species"),
+                t("multi.tab.ivi"), t("multi.tab.map"), t("tab.check"), t("multi.tab.export")])
 
 with tabs[0]:
-    st.subheader(t("multi.params_by_plot"))
-    st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
-             format_func=lambda b: t(f"multi.share.{b}"))
-    _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
-    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
-    st.divider()
-    metrica = st.selectbox(t("multi.compare_by"), ui.metric_columns(df_param),
-                           key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
-    st.plotly_chart(ui.fig_comparativo_barras(df_param, estilos, metrica,
-                                              ui.label(metrica, LANG), LANG),
-                    width="stretch", config=ui.PLOT_CONFIG)
-    st.divider()
+    # first: the overview charts (DBH by plot, comparative profile)
     cbox, crad = st.columns(2)
     with cbox:
         fb = ui.fig_box_dap(resultados, estilos, LANG)
         if fb:
             st.plotly_chart(fb, width="stretch", config=ui.PLOT_CONFIG)
     with crad:
-        met_radar = ["density_live_ha", "ba_live_ha", "canopy_height_m",
-                     "complexity_2_5", "complexity_10", "n_species_live"]
+        met_radar = ["mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
+                     "ba_live_ha", "complexity_2_5", "n_species_live"]
         met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
         if len(df_param) >= 2 and len(met_radar) >= 3:
             st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
                             width="stretch", config=ui.PLOT_CONFIG)
+    st.divider()
+    st.subheader(t("multi.params_by_plot"))
+    st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
+             format_func=lambda b: t(f"multi.share.{b}"))
+    _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
+    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
+    st.divider()
+    base_params = [c for c in ui.metric_columns(df_param) if str(c).isidentifier()]
+    cl, cr = st.columns(2)
+    with cl:
+        st.plotly_chart(ui.fig_dbh_height_plots(df_param, estilos, LANG), width="stretch",
+                        config=ui.PLOT_CONFIG)
+    with cr:
+        modo_f = st.radio(t("multi.free_mode"), ("single", "dual", "xy"), horizontal=True,
+                          key="modo_livre", format_func=lambda k: t(f"multi.free.{k}"))
+        ca_, cb_ = st.columns(2)
+        metrica = ca_.selectbox(t("multi.compare_by"), ui.metric_columns(df_param),
+                                key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
+        segunda = None
+        if modo_f != "single":
+            segunda = cb_.selectbox(t("multi.second_param"), base_params,
+                                    index=min(1, len(base_params) - 1), key="metrica_multi_b",
+                                    format_func=lambda c: ui.label(c, LANG))
+        st.plotly_chart(ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG),
+                        width="stretch", config=ui.PLOT_CONFIG)
 
 with tabs[1]:
-    st.subheader(t("multi.ivi_title"))
-    st.caption(t("method.ivi_multi"))
-    # densidade e área basal absolutas: troncos somados / soma das áreas das parcelas
-    ivi = mc.pooled_importance(resultados)
-    if ivi is not None and not ivi.empty:
-        st.dataframe(ui.for_display(ivi, lang=LANG).style.format(precision=2),
-                     width="stretch")
-        fig = ui.fig_ivi(ivi, estilos, LANG)
-        if fig:
-            st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
-
-with tabs[2]:
     st.subheader(t("multi.species_title"))
     st.caption(t("multi.species_caption"))
     ccol1, ccol2 = st.columns(2)
@@ -207,6 +210,17 @@ with tabs[2]:
         st.plotly_chart(fig_esp, width="stretch", config=ui.PLOT_CONFIG)
     else:
         st.warning(t("multi.no_data_combo"))
+    st.markdown("#### " + t("multi.stacked_title"))
+    cs1, cs2 = st.columns([2, 1])
+    with cs1:
+        tipo_st = st.radio(t("temporal.chart"), ("stack", "stack100"), index=1, horizontal=True,
+                           key="tipo_st_multi", format_func=lambda k: t(f"temporal.chart.{k}"))
+    with cs2:
+        val_st = st.checkbox(t("temporal.show_values"), value=False, key="val_st_multi")
+    df_st = df_long if cond_esp == "both" else df_long[df_long["condition"] == cond_esp]
+    fig_st = ui.fig_species_plots_stacked(df_st, estilos, ui.label(met_esp, LANG), tipo_st, val_st, LANG)
+    if fig_st:
+        st.plotly_chart(fig_st, width="stretch", config=ui.PLOT_CONFIG)
     # pivot table: plots in rows, components (species + L/D) in columns
     if not df_long.empty:
         dft = df_long.copy()
@@ -222,6 +236,18 @@ with tabs[2]:
         st.download_button(t("multi.species_csv"),
                            data=piv.to_csv().encode("utf-8"),
                            file_name=t("file.species_by_plot"), mime="text/csv")
+
+with tabs[2]:
+    st.subheader(t("multi.ivi_title"))
+    st.caption(t("method.ivi_multi"))
+    # densidade e área basal absolutas: troncos somados / soma das áreas das parcelas
+    ivi = mc.pooled_importance(resultados)
+    if ivi is not None and not ivi.empty:
+        st.dataframe(ui.for_display(ivi, lang=LANG).style.format(precision=2),
+                     width="stretch")
+        fig = ui.fig_ivi(ivi, estilos, LANG)
+        if fig:
+            st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
 
 with tabs[3]:
     map_rows = []

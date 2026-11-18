@@ -404,12 +404,15 @@ def fig_hist_dap(res, estilos, lang=None):
     return _layout(fig, estilos, i18n.t("chart.dbh_hist", lang))
 
 
-def fig_altura_dap(res, estilos, lang=None):
-    """Dispersão altura x DAP com regressão linear por espécie."""
+def fig_altura_dap(res, estilos, lang=None, species=None):
+    """Dispersão altura x DAP com regressão linear por espécie. ``species``: lista de
+    espécies (nomes científicos) a mostrar; None = todas."""
     lang = _lang(lang)
     d = res["data"]
     dd = d[d["live"]].dropna(subset=["height", "dbh"])     # live stems only
     dd = dd[(dd["dbh"] > 0) & (dd["height"] > 0)].copy()
+    if species is not None:
+        dd = dd[dd["species_label"].isin(species)]
     if len(dd) < 2:
         return None, []
     sp = label("species", lang)
@@ -436,16 +439,24 @@ def fig_altura_dap(res, estilos, lang=None):
     return _layout(fig, estilos, i18n.t("chart.height_dbh", lang)), detalhes
 
 
-def fig_perfil_vertical(res, estilos, lang=None):
+PROFILE_KINDS = ("stems", "strata", "violin", "bubbles")
+
+
+def fig_perfil_vertical(res, estilos, lang=None, kind="bubbles", strata_width=1.0):
     """
-    Perfil/estrutura vertical do bosque: cada árvore viva como marcador
-    posicionado por altura, tamanho ~ DAP, cor por gênero. Dá a silhueta do dossel.
+    Perfil/estrutura vertical do bosque (troncos vivos com altura). ``kind``:
+    "stems"   cada tronco como uma haste vertical, ordenada pela altura;
+    "strata"  número de troncos por classe de altura, empilhado por espécie;
+    "violin"  distribuição das alturas de cada espécie;
+    "bubbles" cada tronco como um círculo na sua altura, tamanho proporcional ao DAP.
     """
     lang = _lang(lang)
     d = res["data"]
     dd = d[d["live"] & (d["height"] > 0) & d["dbh"].notna() & (d["dbh"] > 0)].copy()
     if dd.empty:
         return None
+    if kind != "bubbles":
+        return _perfil_alt(res, dd, estilos, lang, kind, strata_width)
     dd = dd.sort_values("height")
     dd["x"] = np.arange(len(dd))
     cmap = _cmap(dd["species_label"].unique(), lang)
@@ -470,6 +481,55 @@ def fig_perfil_vertical(res, estilos, lang=None):
     fig.update_layout(xaxis_title=i18n.t("chart.trees_by_height", lang),
                       yaxis_title=label("height", lang),
                       xaxis_showticklabels=False)
+    fig.add_annotation(text=i18n.t("chart.bubble_is_dbh", lang), xref="paper", yref="paper",
+                       x=0, y=1.0, xanchor="left", yanchor="bottom", showarrow=False,
+                       font=dict(size=10, color="#5F726A"))
+    return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
+
+
+def _perfil_alt(res, dd, estilos, lang, kind, strata_width):
+    cmap = _cmap(dd["species_label"].unique(), lang)
+    fig = go.Figure()
+    hd = res["summary"].get("canopy_height_m", 0)
+    if kind == "stems":
+        dd = dd.sort_values("height").reset_index(drop=True)
+        dd["x"] = np.arange(len(dd))
+        for raw in dd["species_label"].unique():
+            esp = species_name(raw, lang)
+            sub = dd[dd["species_label"] == raw]
+            xs, ys = [], []
+            for x, h in zip(sub["x"], sub["height"]):
+                xs += [x, x, None]
+                ys += [0, h, None]
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name=esp,
+                                     line=dict(color=cmap.get(esp, "#555"), width=3)))
+        fig.update_layout(xaxis_title=i18n.t("chart.trees_by_height", lang),
+                          yaxis_title=label("height", lang), xaxis_showticklabels=False)
+    elif kind == "strata":
+        w = float(strata_width)
+        top = np.ceil(dd["height"].max() / w) * w
+        bins = np.arange(0, top + w, w)
+        dd["_c"] = pd.cut(dd["height"], bins=bins, right=False)
+        for raw in dd["species_label"].unique():
+            esp = species_name(raw, lang)
+            cnt = dd[dd["species_label"] == raw].groupby("_c", observed=False).size()
+            fig.add_trace(go.Bar(y=[f"{_num(iv.left, 1, lang)} a {_num(iv.right, 1, lang)}" for iv in cnt.index],
+                                 x=cnt.values, orientation="h", name=esp,
+                                 marker_color=cmap.get(esp, "#555")))
+        fig.update_layout(barmode="stack", xaxis_title=i18n.t("chart.n_stems", lang),
+                          yaxis_title=i18n.t("chart.height_class", lang))
+        return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
+    else:  # violin
+        for raw in dd["species_label"].unique():
+            esp = species_name(raw, lang)
+            sub = dd[dd["species_label"] == raw]
+            fig.add_trace(go.Violin(x=[esp] * len(sub), y=sub["height"], name=esp, box_visible=True,
+                                    meanline_visible=True, line_color=cmap.get(esp, "#555"),
+                                    points="all", pointpos=0, jitter=0.3, marker_size=3))
+        fig.update_layout(yaxis_title=label("height", lang), showlegend=False)
+    if hd:
+        fig.add_hline(y=hd, line_dash="dot", line_color="gray",
+                      annotation_text=i18n.t("chart.canopy_mean", lang, h=_num(hd, 1, lang)))
     return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
 
 
@@ -480,6 +540,84 @@ def fig_perfil_vertical(res, estilos, lang=None):
 # ---------------------------------------------------------------------------
 NON_METRIC_COLUMNS = mc.NON_METRIC_COLUMNS
 metric_columns = mc.metric_columns
+
+
+def fig_dbh_height_plots(df_param, estilos, lang=None):
+    """Each plot as a point: mean DBH (x) against mean height (y), with ±SD of height."""
+    lang = _lang(lang)
+    fig = go.Figure()
+    cores = estilos["paleta"]
+    for i, (_, row) in enumerate(df_param.iterrows()):
+        fig.add_trace(go.Scatter(
+            x=[row["mean_dbh_cm"]], y=[row["height_mean_m"]], mode="markers+text",
+            text=[str(row["plot"])], textposition="top center", name=str(row["plot"]),
+            marker=dict(size=13, color=cores[i % len(cores)]),
+            error_y=dict(type="data", array=[row.get("height_sd_m", 0) or 0], visible="height_sd_m" in row)))
+    fig.update_layout(showlegend=False, xaxis_title=label("mean_dbh_cm", lang),
+                      yaxis_title=label("height_mean_m", lang))
+    return _layout(fig, estilos, i18n.t("chart.dbh_height_plots", lang))
+
+
+def fig_free_compare(df_param, estilos, mode, a, b=None, lang=None):
+    """Free comparison of the plots: ``mode`` "single" (bars of ``a``), "dual" (bars of
+    ``a`` on the left axis, line of ``b`` on the right) or "xy" (``a`` against ``b``)."""
+    from plotly.subplots import make_subplots
+    lang = _lang(lang)
+    cores = estilos["paleta"]
+    if mode == "xy" and b:
+        fig = go.Figure(go.Scatter(x=df_param[a], y=df_param[b], mode="markers+text",
+                                   text=df_param["plot"].astype(str), textposition="top center",
+                                   marker=dict(size=12, color=cores[0])))
+        fig.update_layout(xaxis_title=label(a, lang), yaxis_title=label(b, lang))
+        return _layout(fig, estilos, f"{label(a, lang)} × {label(b, lang)}")
+    if mode == "dual" and b:
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Bar(x=df_param["plot"], y=df_param[a], name=label(a, lang),
+                             marker_color=cores[0]), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df_param["plot"], y=df_param[b], name=label(b, lang),
+                                 mode="lines+markers", line=dict(color=cores[1 % len(cores)])),
+                      secondary_y=True)
+        fig.update_yaxes(title_text=label(a, lang), secondary_y=False)
+        fig.update_yaxes(title_text=label(b, lang), secondary_y=True)
+        fig.update_xaxes(title_text=label("plot", lang))
+        return _layout(fig, estilos, f"{label(a, lang)} · {label(b, lang)}")
+    return fig_comparativo_barras(df_param, estilos, a, label(a, lang), lang)
+
+
+def fig_species_plots_stacked(df_long, estilos, ylabel, chart="stack", show_values=False, lang=None):
+    """Species per plot in one column: live solid, dead hatched; ``chart="stack100"``
+    shows every part as % of the plot's total."""
+    if df_long is None or df_long.empty:
+        return None
+    lang = _lang(lang)
+    df = df_long.groupby(["plot", "species", "condition"], as_index=False)["value"].sum()
+    tot = df.groupby("plot")["value"].transform("sum")
+    df["_v"] = np.where(tot > 0, 100 * df["value"] / tot, 0.0) if chart == "stack100" else df["value"]
+    plots = list(dict.fromkeys(df_long["plot"]))
+    cores = species_colors(df["species"].unique())
+    fig = go.Figure()
+    for cond, pattern in (("live", ""), ("dead", "/")):
+        for sp in sorted(df["species"].unique(), key=str):
+            sub = df[(df["species"] == sp) & (df["condition"] == cond)].set_index("plot").reindex(plots)
+            if sub["_v"].fillna(0).sum() == 0:
+                continue
+            cor = cores[sp]
+            vals = sub["_v"].fillna(0)
+            fig.add_trace(go.Bar(
+                x=plots, y=vals, name=f"{species_name(sp, lang)} · {i18n.t('condition.' + cond, lang)}",
+                text=[num(v, 0 if chart == "stack100" else 2, lang) if v else "" for v in vals]
+                if show_values else None, textposition="inside",
+                marker=dict(color=cor if cond == "live" else "white", line=dict(color=cor, width=1.2),
+                            pattern=dict(shape=pattern, fgcolor=cor, size=6, solidity=0.35))))
+    fig.update_layout(barmode="stack", xaxis_title=label("plot", lang),
+                      yaxis_title=(i18n.t("temporal.chart.stack100", lang) + " · " + ylabel)
+                      if chart == "stack100" else ylabel)
+    if chart == "stack100":
+        fig.update_yaxes(range=[0, 100], ticksuffix="%")
+    fig = _layout(fig, estilos, i18n.t("chart.species_by_plot", lang))
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.2, x=0.5, xanchor="center"),
+                      margin=dict(b=120))
+    return fig
 
 
 def fig_comparativo_barras(df_param, estilos, y, titulo, lang=None):
