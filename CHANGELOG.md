@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-11-19
+
+### Fixed
+
+- The abbreviation `Av` is read as *Avicennia schaueriana* in every region, the convention of the NEMA/UERJ field sheets (`AV`, `RH`, `LG`). In 1.0.0 it was reported as an ambiguous species, which removed those stems from richness and the importance values. *A. germinans* is written `Ag`.
+- Chart axes show full numbers with thousands separators (10.000 in Portuguese, 10,000 in English) instead of SI abbreviations such as 10k. The decimal separator of the charts follows the interface language.
+
+### Changed
+
+- Laiza Lacerda Motta added as author (CITATION.cff, README, citation text in the app and in the exports).
+
 ## [1.0.0] - 2026-11-13
 
 First public release. The date is updated at release time.

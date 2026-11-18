@@ -41,7 +41,7 @@ Species are resolved against the species table of the selected region (see [Spec
 
 - the scientific name (`Rhizophora mangle`),
 - the code (`Rm`) or an alias (`mangue vermelho`),
-- a genus abbreviation (`Rh`, `Av`, `Lg`, `Cn`, `Pe`), resolved with the regional default when one is justified. The abbreviation resolves only where the region has a single species of the genus: `Lg` is *Laguncularia racemosa* and `Cn`, `Ce` and `Co` are *Conocarpus erectus* in every region, and `Rh` is *Rhizophora mangle* in Brazil South and Southeast only. `Av` is ambiguous in all four regions, `Rh` is ambiguous in the other three regions, and `Pe` is ambiguous in the Caribbean and the Eastern Pacific. Use the species code (`As`, `Ag`, ...) or add an alias in the species table to resolve them.
+- a genus abbreviation (`Rh`, `Av`, `Lg`, `Cn`, `Pe`), resolved with the regional default when one is justified. The abbreviation resolves only where the region has a single species of the genus: `Lg` is *Laguncularia racemosa* and `Cn`, `Ce` and `Co` are *Conocarpus erectus* in every region, `Av` is *Avicennia schaueriana* in every region (the convention of the NEMA/UERJ field sheets; write `Ag` for *A. germinans*), and `Rh` is *Rhizophora mangle* in Brazil South and Southeast only. `Rh` is ambiguous in the other three regions, and `Pe` is ambiguous in the Caribbean and the Eastern Pacific. Use the species code (`As`, `Ag`, ...) or add an alias in the species table to resolve them.
 
 Species that cannot be resolved are reported by the validation and are not counted as a species; see [methods](methods.md#6-decisions-and-adaptations).
 

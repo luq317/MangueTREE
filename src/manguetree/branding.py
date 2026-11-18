@@ -10,7 +10,7 @@ Identidade visual do MangueTREE: textos institucionais, cores e logo (conceito
 from manguetree import __version__
 
 REPO_URL = "https://github.com/luq317/MangueTREE"
-CITATION = (f"Pereira LS, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v{__version__}. "
+CITATION = (f"Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v{__version__}. "
             f"{REPO_URL}")
 
 # --- Textos institucionais ---

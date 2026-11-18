@@ -1,7 +1,7 @@
 def test_version():
     import manguetree
 
-    assert manguetree.__version__ == "1.0.0"
+    assert manguetree.__version__ == "1.0.1"
 
 
 def test_launcher_imports():

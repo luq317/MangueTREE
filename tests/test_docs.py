@@ -58,9 +58,9 @@ def test_no_broken_links_to_removed_docs():
 def test_citation_cff_fields():
     text = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
     assert re.search(r"^cff-version: 1\.2\.0$", text, re.M)
-    assert re.search(r"^version: 1\.0\.0$", text, re.M)
+    assert re.search(r"^version: 1\.0\.1$", text, re.M)
     assert re.search(r"^license: MIT$", text, re.M)
-    for name in ("Pereira", "Matta", "Chaves", "Soares"):
+    for name in ("Pereira", "Motta", "Matta", "Chaves", "Soares"):
         assert f"family-names: {name}" in text or f'family-names: "{name}"' in text, name
     assert "0000-0002-1891-7621" in text
 

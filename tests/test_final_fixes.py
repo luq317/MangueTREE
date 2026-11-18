@@ -229,7 +229,7 @@ def test_i2_fallback_is_flagged():
 # ---------------------------------------------------------------- I3
 def test_i3_unresolved_species_are_in_class_tables_and_not_in_richness():
     north = _res("BR_N_NE")
-    df = pd.DataFrame({"tree_id": [1, 2, 3], "species": ["Av", "Rh", "Lg"],
+    df = pd.DataFrame({"tree_id": [1, 2, 3], "species": ["Pe", "Rh", "Lg"],
                        "dbh": [5.0, 6.0, 7.0], "height": [3, 4, 5],
                        "condition": ["v"] * 3})
     r = calc.analyze(df, 100.0, north)
@@ -298,7 +298,7 @@ def test_i6_user_alias_overrides_genus_default():
         assert res.code == "Ag" and res.status == "ok"
     # built-in behaviour untouched
     assert _res("BR_S_SE").resolve("As").code == "As"
-    assert _res("BR_N_NE").resolve("Av").status == "ambiguous"
+    assert _res("BR_N_NE").resolve("Av").code == "As"
 
 
 # ---------------------------------------------------------------- I7
@@ -341,7 +341,7 @@ def test_author_and_sp_suffixes():
     assert r.resolve("Rhizophora mangle L.").code == "Rm"
     assert r.resolve("Avicennia germinans (L.) L.").code == "Ag"
     assert r.resolve("Laguncularia sp.").code == "Lg"
-    assert r.resolve("Avicennia spp.").status == "ambiguous"
+    assert r.resolve("Rhizophora spp.").status == "ambiguous"
     assert _res("BR_S_SE").resolve("Rhizophora sp").code == "Rm"
 
 

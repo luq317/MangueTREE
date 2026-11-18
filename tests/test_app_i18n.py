@@ -218,7 +218,7 @@ def test_no_em_dash_in_user_facing_code_strings():
 
 def test_branding_citation_and_about():
     from manguetree import branding, __version__
-    assert branding.CITATION == ("Pereira LS, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE "
+    assert branding.CITATION == ("Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE "
                                  f"v{__version__}. https://github.com/luq317/MangueTREE")
     assert branding.REPO_URL == "https://github.com/luq317/MangueTREE"
     for lang in ("en", "pt"):

@@ -3,8 +3,8 @@ message: "If you use this software, please cite it using the metadata below."
 title: "MangueTREE: structural and phytosociological analysis of mangrove forest plots"
 abstract: "Python engine and Streamlit app that computes forest structure, phytosociology (relative values and importance value), DBH classes and the Holdridge complexity index from stem-level field data of mangrove plots."
 type: software
-version: 1.0.0
-date-released: 2026-11-13
+version: 1.0.1
+date-released: 2026-11-19
 license: MIT
 repository-code: "https://github.com/luq317/MangueTREE"
 authors:
@@ -13,6 +13,11 @@ authors:
     orcid: "https://orcid.org/0000-0002-1891-7621"
     email: pereira.lucas_1@posgraduacao.uerj.br
     affiliation: "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil; Programa de Pós-Graduação em Oceanografia, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+  - family-names: Motta
+    given-names: Laiza Lacerda
+    orcid: "https://orcid.org/0009-0002-2186-0272"
+    email: lacerdamotta.laiza@gmail.com
+    affiliation: "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
   - family-names: Matta
     given-names: Tatiane Costa da
     orcid: "https://orcid.org/0009-0000-4133-5729"

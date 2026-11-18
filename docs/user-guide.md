@@ -10,7 +10,7 @@ The sidebar of every page starts with the language selector (English or Portugue
 
 ## Settings shared by the analysis pages
 
-- **Region.** Selects the species expected in your plots and how genus abbreviations such as `Rh` are resolved (`Av` is ambiguous everywhere; use the species code, e.g. `As` or `Ag`). Choose the region of your site: Brazil South and Southeast, Brazil North and Northeast, Caribbean and Western Atlantic, or Eastern Pacific (Americas).
+- **Region.** Selects the species expected in your plots and how genus abbreviations such as `Rh` are resolved (`Av` is always *Avicennia schaueriana*; write `Ag` for *A. germinans*). Choose the region of your site: Brazil South and Southeast, Brazil North and Northeast, Caribbean and Western Atlantic, or Eastern Pacific (Americas).
 - **Species table.** An expander shows the table of species and aliases. You can edit it, add species, upload your own CSV with the same columns, or reset it. The table is provisional; check it against your regional flora.
 - **DBH class cutoffs.** Two cutoffs in cm (2.5 and 10 by default) that define three classes. The cutoffs must differ.
 - **Plot area.** The area is read from the file when possible. The default or fallback area (100 m²) is used only when the file has none; the data-check panel warns you when that happens. A `.csv` or `.txt` file never carries the area, so for those files the warning stays until you change the area in the sidebar from its default value.

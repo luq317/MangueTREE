@@ -119,8 +119,8 @@ def test_blank_condition_counted_dead_when_chosen():
 
 def test_ambiguous_species_is_flagged():
     res = SpeciesResolver(load_species_table(), "BR_N_NE", load_genus_defaults())
-    assert res.resolve("Av").status == "ambiguous"
-    hits = _of(validation.validate(_df(species=["Av"]), res), "ambiguous_species")
+    assert res.resolve("Rh").status == "ambiguous"
+    hits = _of(validation.validate(_df(species=["Rh"]), res), "ambiguous_species")
     assert len(hits) == 1 and hits[0].severity == "error" and hits[0].source_row == 2
 
 

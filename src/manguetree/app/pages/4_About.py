@@ -19,7 +19,7 @@ st.header(t("about.method_title"))
 st.markdown(t("about.method"))
 
 st.header(t("about.authors_title"))
-st.markdown("\n".join(f"- {a}" for a in ("Lucas Silva Pereira", "Tatiane Costa da Matta",
+st.markdown("\n".join(f"- {a}" for a in ("Lucas Silva Pereira", "Laiza Lacerda Motta", "Tatiane Costa da Matta",
                                          "Filipe de Oliveira Chaves",
                                          "Mário Luiz Gomes Soares")))
 st.write(t("about.affiliation"))

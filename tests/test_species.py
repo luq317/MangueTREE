@@ -27,12 +27,21 @@ def test_full_names_resolve_everywhere():
     assert _resolver("BR_S_SE").resolve("A. germinans").status == "ok"
 
 
-def test_av_is_ambiguous_in_north():
+def test_av_is_schaueriana_in_every_region():
     for region in REGIONS:
         res = _resolver(region).resolve("Av")
-        assert res.status == "ambiguous" and res.scientific_name is None
+        assert res.code == "As" and res.scientific_name == "Avicennia schaueriana"
         assert res.genus == "Avicennia"
-        assert _resolver(region).resolve("Avicennia").status == "ambiguous"
+        assert _resolver(region).resolve("Ag").code == "Ag"
+
+
+def test_nema_codes_in_south_southeast():
+    """Field sheets of NEMA/UERJ write AV, RH and LG (v1.0.1)."""
+    r = _resolver("BR_S_SE")
+    for raw, code in (("AV", "As"), ("av", "As"), ("RH", "Rm"), ("LG", "Lg"), ("Ag", "Ag"), ("AS", "As")):
+        assert r.resolve(raw).code == code, raw
+    assert r.resolve("AV").scientific_name == "Avicennia schaueriana"
+    assert r.resolve("Ag").scientific_name == "Avicennia germinans"
 
 
 def test_genus_abbreviation_defaults_per_region():
@@ -88,4 +97,12 @@ def test_aliases_ignore_case_accents_dots():
     r = _resolver("BR_S_SE")
     assert r.resolve("mangue vermelho").code == "Rm"
     assert r.resolve("MANGLE  ROJO").code == "Rm"
-    assert r.resolve("AV").status == "ambiguous"
+    assert r.resolve("AV").code == "As"
+
+
+def test_chart_axes_use_full_numbers():
+    import plotly.graph_objects as go
+    from manguetree import charts
+    fig = charts._layout(go.Figure(go.Bar(x=["F1"], y=[12500])), {})
+    assert fig.layout.yaxis.exponentformat == "none"
+    assert fig.layout.yaxis.separatethousands is True

@@ -89,13 +89,13 @@ The `data/` folder holds permanent-plot data from the Guaratiba mangrove (Rio de
 
 The software has no DOI yet; it will be added here after the Zenodo release. Until then, cite:
 
-> Pereira LS, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.0.0. https://github.com/luq317/MangueTREE
+> Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.0.1. https://github.com/luq317/MangueTREE
 
 ```bibtex
 @software{pereira2026manguetree,
-  author  = {Pereira, Lucas Silva and Matta, Tatiane Costa da and Chaves, Filipe de Oliveira and Soares, M{\'a}rio Luiz Gomes},
+  author  = {Pereira, Lucas Silva and Motta, Laiza Lacerda and Matta, Tatiane Costa da and Chaves, Filipe de Oliveira and Soares, M{\'a}rio Luiz Gomes},
   title   = {{MangueTREE: structural and phytosociological analysis of mangrove forest plots}},
-  version = {1.0.0},
+  version = {1.0.1},
   year    = {2026},
   url     = {https://github.com/luq317/MangueTREE}
 }

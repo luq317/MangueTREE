@@ -104,10 +104,12 @@ def _layout(fig, estilos, titulo=None):
         title=dict(text=titulo, x=0.0, xanchor="left", font=dict(size=tam_t)),
         plot_bgcolor="white", paper_bgcolor="white",
         legend_title_text="", margin=dict(t=46, r=24, b=58, l=62),
+        separators=",." if _lang() == "pt" else ".,",              # decimal, thousands
     )
     eixo = dict(showline=True, linewidth=0.8, linecolor="#5F726A", zeroline=False,
                 ticks="outside", tickcolor="#5F726A", ticklen=4,
-                tickfont=dict(size=10), title_font=dict(size=tam_e))
+                tickfont=dict(size=10), title_font=dict(size=tam_e),
+                exponentformat="none", separatethousands=True)     # 10.000, never 10k
     fig.update_xaxes(showgrid=False, **eixo)
     fig.update_yaxes(showgrid=False, **eixo)
     if not estilos.get("seal"):         # the seal is opt-in (sidebar checkbox)

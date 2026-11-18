@@ -14,7 +14,7 @@ they can be uploaded to the app to try every analysis page.
   sheet per plot.
 - `guaratiba_H2_2003_2025.xlsx`: plot H2 surveyed 15 times between 2003 and 2025,
   one sheet per survey (the sheet name is the survey year).
-- `guaratiba_F2_with_errors.xlsx`: plot F2 (2009) with deliberate mistakes (an ambiguous and an unknown species, an implausible DBH, a stem without condition, a dead stem with a height, a tag repeated with another species). It is used to demonstrate the data check and is not a real survey.
+- `guaratiba_F2_with_errors.xlsx`: plot F2 (2009) with deliberate mistakes (an unknown species, an implausible DBH, a stem without condition, a dead stem with a height, a tag repeated with another species). It is used to demonstrate the data check and is not a real survey.
 - The published files use the MangueTREE species codes. The laboratory spreadsheets use genus abbreviations, which were mapped when the files were converted: Av to As (*Avicennia schaueriana*) and Rh to Rm (*Rhizophora mangle*); Lg (*Laguncularia racemosa*) is already a species code. Guaratiba has only these three species.
 - The files were converted from the laboratory spreadsheets into the MangueTREE
   layout. Tag numbers and field notes were removed.

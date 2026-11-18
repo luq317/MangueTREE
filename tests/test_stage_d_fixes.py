@@ -105,7 +105,7 @@ def test_demo_file_with_errors_triggers_the_expected_checks():
     df, _ = mio.load_excel_sheet(str(ROOT / "data" / "guaratiba_F2_with_errors.xlsx"), "F2", "", 100.0)
     res = SpeciesResolver(load_species_table(), "BR_S_SE", load_genus_defaults())
     kinds = {i.kind for i in validate(df, res)}
-    assert {"ambiguous_species", "unknown_species", "dbh_without_condition", "implausible_value",
+    assert {"unknown_species", "dbh_without_condition", "implausible_value",
             "tree_species_conflict", "dead_with_height", "stem_count_mismatch"} <= kinds
 
 

@@ -23,6 +23,8 @@ def test_requirements_are_pinned():
              if ln.strip() and not ln.strip().startswith("#")]
     assert lines
     for ln in lines:
+        if ln == ".":        # installs the package itself (Streamlit Community Cloud)
+            continue
         assert "==" in ln, ln
 
 
