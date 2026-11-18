@@ -288,12 +288,26 @@ with tabs[1]:
             valores = st.checkbox(t("temporal.show_values"), value=False, key="val_esp_temp")
             GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_esp")
         if MULTI:
-            escolha = st.selectbox(t("temporal.plot_choice"), ["__side__", "__mean__"] + PLOTS, key="plot_esp_temp",
-                                   format_func=lambda p: t("temporal.all_plots_mean") if p == "__mean__"
-                                   else t("temporal.side_by_side") if p == "__side__" else p)
+            _rot = {"__side__": t("temporal.side_by_side"), "__one__": t("temporal.one_species"),
+                    "__diff__": t("temporal.difference"), "__mean__": t("temporal.all_plots_mean")}
+            escolha = st.selectbox(t("temporal.plot_choice"), list(_rot) + PLOTS, key="plot_esp_temp",
+                                   format_func=lambda p: _rot.get(p, p))
         else:
             escolha = PLOTS[0]
-        if escolha == "__side__":
+        if escolha in ("__one__", "__diff__"):
+            base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
+            if escolha == "__one__":
+                esp_1 = st.selectbox(t("temporal.species_pick"), sorted(df_esp["species"].unique(), key=str),
+                                     key="esp_uma", format_func=lambda v: ui.species_name(v, LANG))
+                f1 = ui.fig_one_species_plots(df_esp, estilos, esp_1, met_e, LANG, GAPS, valores)
+            else:
+                d1, d2 = st.columns(2)
+                pa = d1.selectbox(t("temporal.plot_a"), PLOTS, index=0, key="dif_a")
+                pb = d2.selectbox(t("temporal.plot_b"), PLOTS, index=min(1, len(PLOTS) - 1), key="dif_b")
+                f1 = ui.fig_plot_difference(df_esp, estilos, pa, pb, met_e, LANG, GAPS)
+            if f1:
+                st.plotly_chart(f1, width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_cmp")
+        elif escolha == "__side__":
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
             st.plotly_chart(ui.fig_species_by_plot_panels(df_esp, estilos, met_e, tipo, valores, LANG, GAPS),
                             width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_lado")
@@ -301,20 +315,35 @@ with tabs[1]:
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
         else:
             base_e = df_esp[df_esp["plot"] == escolha]
-        fig_e = None if escolha == "__side__" else ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG, GAPS)
+        fig_e = None if escolha in ("__side__", "__one__", "__diff__") else ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG, GAPS)
         if fig_e:
             st.plotly_chart(fig_e, width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_temp")
         # the table below shows the same data as the chart, and says so
         cols_tab = list(ui.LIVE_DEAD_METRICS[met_e][:2]) if met_e in ui.LIVE_DEAD_METRICS else [met_e]
-        nome_parcela = t("temporal.all_plots_mean") if escolha in ("__mean__", "__side__") else escolha
-        st.markdown("**" + t("temporal.table_of", metric=ui.label(met_e, LANG),
-                             plot=nome_parcela) + "**")
-        piv = base_e.pivot_table(index="year", columns="species", values=cols_tab, aggfunc="mean")
-        if len(cols_tab) == 1:
-            piv.columns = [ui.species_name(sp, LANG) for _m, sp in piv.columns]
+        if escolha == "__one__":
+            st.markdown("**" + t("temporal.table_of", metric=ui.label(met_e, LANG),
+                                 plot=ui.species_name(esp_1, LANG)) + "**")
+            piv = df_esp[df_esp["species"] == esp_1].pivot_table(index="year", columns="plot",
+                                                                 values=cols_tab, aggfunc="mean")
+            piv = piv[sorted(piv.columns, key=lambda c: (PLOTS.index(c[1]), cols_tab.index(c[0])))]
+            piv.columns = [f"{p} · {ui.label(m, LANG)}" if len(cols_tab) > 1 else str(p) for m, p in piv.columns]
+        elif escolha == "__diff__":
+            col_d = ui.LIVE_DEAD_METRICS[met_e][2] if met_e in ui.LIVE_DEAD_METRICS else met_e
+            st.markdown("**" + t("temporal.diff_title", a=pa, b=pb, metric=ui.label(col_d, LANG)) + "**")
+            pa_ = df_esp[df_esp["plot"] == pa].pivot_table(index="year", columns="species", values=col_d)
+            pb_ = df_esp[df_esp["plot"] == pb].pivot_table(index="year", columns="species", values=col_d)
+            piv = pb_.sub(pa_, fill_value=0).dropna(how="all")
+            piv.columns = [ui.species_name(c, LANG) for c in piv.columns]
         else:
-            piv = piv[sorted(piv.columns, key=lambda c: (str(c[1]), cols_tab.index(c[0])))]
-            piv.columns = [f"{ui.species_name(sp, LANG)} · {ui.label(m, LANG)}" for m, sp in piv.columns]
+            nome_parcela = t("temporal.all_plots_mean") if escolha.startswith("__") else escolha
+            st.markdown("**" + t("temporal.table_of", metric=ui.label(met_e, LANG),
+                                 plot=nome_parcela) + "**")
+            piv = base_e.pivot_table(index="year", columns="species", values=cols_tab, aggfunc="mean")
+            if len(cols_tab) == 1:
+                piv.columns = [ui.species_name(sp, LANG) for _m, sp in piv.columns]
+            else:
+                piv = piv[sorted(piv.columns, key=lambda c: (str(c[1]), cols_tab.index(c[0])))]
+                piv.columns = [f"{ui.species_name(sp, LANG)} · {ui.label(m, LANG)}" for m, sp in piv.columns]
         piv.index.name = ui.label("year", LANG)
         st.dataframe(piv.style.format(lambda v: ui.num(v, 2, LANG), na_rep="-"), width="stretch")
         st.download_button(t("temporal.species_csv"),

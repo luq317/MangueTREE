@@ -1440,3 +1440,62 @@ def fig_species_by_plot_panels(df_esp, estilos, metric, chart="stack", show_valu
     title = (i18n.t(f"temporal.metric.{metric}", lang) if metric in LIVE_DEAD_METRICS
              else i18n.t("chart.by_species", lang, metric=label(metric, lang)))
     return _layout(fig, estilos, title)
+
+
+def fig_one_species_plots(df_esp, estilos, species, metric, lang=None, gaps=False, show_values=False):
+    """One species, every plot side by side in each year (live solid, dead hatched when
+    ``metric`` is a live + dead option)."""
+    lang = _lang(lang)
+    df = df_esp[df_esp["species"] == species].sort_values("year")
+    if df.empty:
+        return None
+    plots = list(dict.fromkeys(df_esp["plot"]))
+    # plots need clearly different colours (the default palette is all greens)
+    cores = estilos["paleta"] if len(set(estilos["paleta"][:len(plots)])) == len(plots) and \
+        estilos["paleta"] is not PALETAS["manguetree"] else ["#2E8B57", "#4C78A8", "#E3A21A", "#7B5230", "#8C9A94", "#1F4D3A"]
+    fig = go.Figure()
+    partes = ((LIVE_DEAD_METRICS[metric][0], "live", ""), (LIVE_DEAD_METRICS[metric][1], "dead", "/")) \
+        if metric in LIVE_DEAD_METRICS else ((metric, None, ""),)
+    for i, p in enumerate(plots):
+        sub = df[df["plot"] == p]
+        cor = cores[i % len(cores)]
+        for j, (col, cond, pattern) in enumerate(partes):
+            nome = f"{p} · {i18n.t('condition.' + cond, lang)}" if cond else str(p)
+            fig.add_trace(go.Bar(
+                x=sub["year"], y=sub[col], name=nome, offsetgroup=str(p), legendrank=10 * i + j,
+                text=[num(v, 2, lang) for v in sub[col]] if show_values else None, textposition="inside",
+                marker=dict(color=cor if cond != "dead" else "white", line=dict(color=cor, width=1.2),
+                            pattern=dict(shape=pattern, fgcolor=cor, size=6, solidity=0.35))))
+    ylab = label(LIVE_DEAD_METRICS[metric][2], lang) if metric in LIVE_DEAD_METRICS else label(metric, lang)
+    fig.update_layout(barmode="stack", xaxis_title=label("year", lang), yaxis_title=ylab)
+    fig = _layout(fig, estilos, f"{species_name(species, lang)} · {label(metric, lang)}")
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0, xanchor="left",
+                                  entrywidth=0.5, entrywidthmode="fraction", font=dict(size=10),
+                                  traceorder="normal"), margin=dict(b=120))
+    return _year_axis(fig, df, gaps)
+
+
+def fig_plot_difference(df_esp, estilos, plot_a, plot_b, metric, lang=None, gaps=False):
+    """Difference ``plot_b - plot_a`` of a per-species parameter in each year (bars above
+    zero: plot_b has more). For the live + dead options the total is compared."""
+    lang = _lang(lang)
+    col = LIVE_DEAD_METRICS[metric][2] if metric in LIVE_DEAD_METRICS else metric
+    a = df_esp[df_esp["plot"] == plot_a].pivot_table(index="year", columns="species", values=col, aggfunc="mean")
+    b = df_esp[df_esp["plot"] == plot_b].pivot_table(index="year", columns="species", values=col, aggfunc="mean")
+    years = sorted(set(a.index) & set(b.index))
+    if not years:
+        return None
+    sps = sorted(set(a.columns) | set(b.columns), key=str)
+    a = a.reindex(index=years, columns=sps).fillna(0)
+    b = b.reindex(index=years, columns=sps).fillna(0)
+    cores = species_colors(sps)
+    fig = go.Figure()
+    for sp in sps:
+        fig.add_trace(go.Bar(x=years, y=(b[sp] - a[sp]), name=species_name(sp, lang), marker_color=cores[sp]))
+    fig.add_hline(y=0, line_color="#5F726A", line_width=1.2)
+    fig.update_layout(barmode="group", xaxis_title=label("year", lang),
+                      yaxis_title=i18n.t("temporal.diff_axis", lang, metric=label(col, lang)))
+    fig = _layout(fig, estilos, i18n.t("temporal.diff_title", lang, a=plot_a, b=plot_b, metric=label(col, lang)))
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0, xanchor="left",
+                                  font=dict(size=10)), margin=dict(b=110))
+    return _year_axis(fig, pd.DataFrame({"year": years}), gaps)

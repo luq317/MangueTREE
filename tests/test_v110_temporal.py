@@ -94,3 +94,15 @@ def test_pdf_data_check_comes_last(monkeypatch):
     heads = [b[1] for b in blocks if b[0] == "h"]
     assert heads[-1] == rep.xml_escape(rep._T("en")("report.h.verification"))
     assert heads[0] != heads[-1]
+
+
+def test_one_species_and_difference_charts():
+    df = pd.DataFrame({"plot": ["A", "A", "B", "B"], "year": [2003, 2004, 2003, 2004],
+                       "species": ["Rhizophora mangle"] * 4,
+                       "ba_live_ha": [5.0, 6.0, 4.0, 7.0], "ba_dead_ha": [1.0, 0.5, 0.2, 0.0],
+                       "ba_total_ha": [6.0, 6.5, 4.2, 7.0]})
+    est = {"paleta": ["#000", "#111"]}
+    f = ui.fig_one_species_plots(df, est, "Rhizophora mangle", "live_dead_ba", "pt")
+    assert len(f.data) == 4 and f.data[1].marker.pattern.shape == "/"
+    d = ui.fig_plot_difference(df, est, "A", "B", "live_dead_ba", "pt")
+    assert [round(v, 2) for v in d.data[0].y] == [-1.8, 0.5]
