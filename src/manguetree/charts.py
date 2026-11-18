@@ -844,6 +844,24 @@ def seal_checkbox(container):
     return value
 
 
+NAV_PAGES = (("Home.py", "nav.home", "🏠"),
+             ("pages/1_Single_plot.py", "nav.single", "🌳"),
+             ("pages/2_Multiple_plots.py", "nav.multiple", "🌲"),
+             ("pages/3_Temporal.py", "nav.temporal", "📈"),
+             ("pages/4_About.py", "nav.about", "ℹ️"))
+
+
+def sidebar_nav(container):
+    """Page menu with translated names. Streamlit's automatic menu (built from the
+    file names) is turned off in .streamlit/config.toml (showSidebarNavigation)."""
+    for page, key, icon in NAV_PAGES:
+        try:
+            container.page_link(page, label=i18n.t(key), icon=icon)
+        except Exception:        # outside a multipage run (unit tests of a single page)
+            pass
+    container.divider()
+
+
 def quit_button(container):
     """"Quit MangueTREE" button for the desktop build (launcher sets MANGUETREE_DESKTOP):
     stops the local server, so the app needs no console window to close."""

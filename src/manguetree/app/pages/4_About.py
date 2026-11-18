@@ -7,6 +7,7 @@ from manguetree.i18n import t
 
 st.set_page_config(layout="wide", page_title=t("about.page_title"))
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
+ui.sidebar_nav(st.sidebar)
 ui.quit_button(st.sidebar)
 
 ui.topo(t("about.title"), t("about.subtitle"))

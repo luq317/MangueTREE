@@ -8,3 +8,11 @@ def _clear_i18n_missing():
     i18n.MISSING.clear()
     yield
     i18n.MISSING.clear()
+
+
+@pytest.fixture(autouse=True)
+def _english_ui_in_tests(request, monkeypatch):
+    """The app opens in Portuguese (i18n.UI_DEFAULT); the app tests were written
+    against the English labels, so they run with English unless marked ``pt_default``."""
+    if "pt_default" not in request.keywords:
+        monkeypatch.setattr(i18n, "UI_DEFAULT", "en")

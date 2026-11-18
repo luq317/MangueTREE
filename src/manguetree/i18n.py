@@ -13,8 +13,10 @@ from functools import lru_cache
 from types import MappingProxyType
 from importlib import resources
 
-LANGUAGES = {"en": "English", "pt": "Português"}
-DEFAULT = "en"
+LANGUAGES = {"pt": "Português", "en": "English"}
+FLAGS = {"pt": "🇧🇷", "en": "🇬🇧"}
+DEFAULT = "en"            # fallback catalog and language outside Streamlit (library use)
+UI_DEFAULT = "pt"         # language the app opens in
 SESSION_KEY = "lang"
 CHOICE_KEY = "_lang"      # plain (non-widget) copy of the choice, survives page changes
 
@@ -39,7 +41,7 @@ def get_lang():
         # "lang" is the selector widget's key; Streamlit drops it on a page change (widget
         # ids include the page), so the last choice is also kept in a plain key.
         ss = st.session_state
-        lang = ss.get(SESSION_KEY, ss.get(CHOICE_KEY, DEFAULT))
+        lang = ss.get(SESSION_KEY, ss.get(CHOICE_KEY, UI_DEFAULT))
     except Exception:
         return DEFAULT
     return lang if lang in LANGUAGES else DEFAULT
@@ -82,6 +84,6 @@ def language_selector(container):
     codes = list(LANGUAGES)
     current = container.selectbox(
         t("app.language", get_lang()), codes, index=codes.index(get_lang()),
-        format_func=LANGUAGES.get, key=SESSION_KEY)
+        format_func=lambda c: f"{FLAGS.get(c, '')} {LANGUAGES[c]}".strip(), key=SESSION_KEY)
     st.session_state[CHOICE_KEY] = current
     return current

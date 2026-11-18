@@ -36,3 +36,4 @@ manguetree = ["data/*", "app/*.py", "app/pages/*.py", "app/assets/*", "app/.stre
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["pt_default: run the app test with the Portuguese default language"]

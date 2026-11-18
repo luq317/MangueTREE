@@ -9,6 +9,7 @@ from manguetree.species import load_species_table
 
 st.set_page_config(page_title=t("home.page_title"), page_icon="🌳", layout="wide")
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
+ui.sidebar_nav(st.sidebar)
 ui.quit_button(st.sidebar)
 
 ui.topo(t("home.title"), t("home.subtitle"))

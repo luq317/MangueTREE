@@ -15,6 +15,7 @@ from manguetree.validation import validate
 
 st.set_page_config(layout="wide", page_title=t("single.page_title"), page_icon="📊")
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
+ui.sidebar_nav(st.sidebar)
 ui.topo(t("single.title"), t("single.subtitle"))
 st.markdown(t("single.intro"))
 

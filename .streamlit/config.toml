@@ -7,4 +7,5 @@ textColor = "#1A2B22"
 font = "sans serif"
 
 [client]
+showSidebarNavigation = false
 toolbarMode = "viewer"
