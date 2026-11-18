@@ -53,7 +53,8 @@ def css(tab_icons=()):
     rules.append('[data-testid="stMetricLabel"] p,[data-testid="stMetricLabel"] div'
                  '{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;}'
                  '[data-testid="stMetricValue"],[data-testid="stMetricValue"] div'
-                 '{font-size:1.75rem;white-space:normal!important;overflow:visible!important;'
+                 '{font-size:1.35rem;white-space:normal!important;overflow:visible!important;'
                  'text-overflow:clip!important;}'
-                 '[data-testid="stMetric"]{height:100%;}')
+                 '[data-testid="stMetricLabel"] p{font-size:0.8rem!important;}'
+                 '[data-testid="stMetric"]{height:100%;padding:10px 14px!important;}')
     return "<style>" + "".join(rules) + "</style>"

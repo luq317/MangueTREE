@@ -151,44 +151,45 @@ tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.species"),
                 t("multi.tab.ivi"), t("multi.tab.map"), t("tab.check"), t("multi.tab.export")])
 
 with tabs[0]:
-    # first: the overview charts (DBH by plot, comparative profile)
-    cbox, crad = st.columns(2)
-    with cbox:
-        fb = ui.fig_box_dap(resultados, estilos, LANG)
-        if fb:
-            st.plotly_chart(fb, width="stretch", config=ui.PLOT_CONFIG)
-    with crad:
-        met_radar = ["mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
-                     "ba_live_ha", "complexity_2_5", "n_species_live"]
-        met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
-        if len(df_param) >= 2 and len(met_radar) >= 3:
-            st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
-                            width="stretch", config=ui.PLOT_CONFIG)
-    st.divider()
-    st.subheader(t("multi.params_by_plot"))
-    st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
-             format_func=lambda b: t(f"multi.share.{b}"))
-    _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
-    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
-    st.divider()
+    # first: the free chart (opens on the DBH of each plot) and the normalised profile
     base_params = [c for c in ui.metric_columns(df_param) if str(c).isidentifier()]
     cl, cr = st.columns(2)
     with cl:
-        st.plotly_chart(ui.fig_dbh_height_plots(df_param, estilos, LANG), width="stretch",
-                        config=ui.PLOT_CONFIG)
-    with cr:
-        modo_f = st.radio(t("multi.free_mode"), ("single", "dual", "xy"), horizontal=True,
-                          key="modo_livre", format_func=lambda k: t(f"multi.free.{k}"))
+        cf1, cf2 = st.columns(2)
+        modo_f = cf1.radio(t("multi.free_mode"), ("single", "dual", "xy"), horizontal=True,
+                           key="modo_livre", format_func=lambda k: t(f"multi.free.{k}"))
+        tipo_f = "bar"
+        if modo_f == "single":
+            tipo_f = cf2.radio(t("multi.chart_kind"), ("box", "violin", "bar", "line"), horizontal=True,
+                               key="tipo_livre", format_func=lambda k: t(f"multi.kind.{k}"))
         ca_, cb_ = st.columns(2)
-        metrica = ca_.selectbox(t("multi.compare_by"), ui.metric_columns(df_param),
+        metrica = ca_.selectbox(t("multi.compare_by"), base_params,
+                                index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
                                 key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
         segunda = None
         if modo_f != "single":
             segunda = cb_.selectbox(t("multi.second_param"), base_params,
                                     index=min(1, len(base_params) - 1), key="metrica_multi_b",
                                     format_func=lambda c: ui.label(c, LANG))
-        st.plotly_chart(ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG),
+        st.plotly_chart(ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
+                                            kind=tipo_f, resultados=resultados),
                         width="stretch", config=ui.PLOT_CONFIG)
+        if modo_f == "single" and tipo_f in ("box", "violin"):
+            st.caption(t("multi.kind_note"))
+    with cr:
+        met_radar = ["mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
+                     "ba_live_ha", "complexity_2_5", "n_species_live"]
+        met_radar = [m for m in met_radar if m in ui.metric_columns(df_param)]
+        if len(df_param) >= 2 and len(met_radar) >= 3:
+            st.plotly_chart(ui.fig_radar(df_param, estilos, met_radar, LANG),
+                            width="stretch", config=ui.PLOT_CONFIG)
+            st.caption(t("multi.radar_note"))
+    st.divider()
+    st.subheader(t("multi.params_by_plot"))
+    st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
+             format_func=lambda b: t(f"multi.share.{b}"))
+    _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
+    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
 
 with tabs[1]:
     st.subheader(t("multi.species_title"))
@@ -204,16 +205,9 @@ with tabs[1]:
                             format_func=lambda k: ui.condition_label(k, LANG))
     metrica_key = "area" if met_esp == "ba_ha" else "densidade"
     df_long = ui.dados_especies_parcelas(resultados, metrica=metrica_key)
-    fig_esp = ui.fig_especies_parcelas(df_long, estilos, ui.label(met_esp, LANG),
-                                       condicao=cond_esp, lang=LANG)
-    if fig_esp:
-        st.plotly_chart(fig_esp, width="stretch", config=ui.PLOT_CONFIG)
-    else:
-        st.warning(t("multi.no_data_combo"))
-    st.markdown("#### " + t("multi.stacked_title"))
     cs1, cs2 = st.columns([2, 1])
     with cs1:
-        tipo_st = st.radio(t("temporal.chart"), ("stack", "stack100"), index=1, horizontal=True,
+        tipo_st = st.radio(t("temporal.chart"), ("stack", "stack100"), horizontal=True,
                            key="tipo_st_multi", format_func=lambda k: t(f"temporal.chart.{k}"))
     with cs2:
         val_st = st.checkbox(t("temporal.show_values"), value=False, key="val_st_multi")
@@ -221,6 +215,8 @@ with tabs[1]:
     fig_st = ui.fig_species_plots_stacked(df_st, estilos, ui.label(met_esp, LANG), tipo_st, val_st, LANG)
     if fig_st:
         st.plotly_chart(fig_st, width="stretch", config=ui.PLOT_CONFIG)
+    else:
+        st.warning(t("multi.no_data_combo"))
     # pivot table: plots in rows, components (species + L/D) in columns
     if not df_long.empty:
         dft = df_long.copy()

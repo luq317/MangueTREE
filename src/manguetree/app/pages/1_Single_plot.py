@@ -137,7 +137,9 @@ with tab_panel:
         t("dashboard.subtitle", area=N(area_final, 0), n=r["n_species_live"])]
     sub_p = " · ".join(partes)
     cores_p = ui.species_colors(res["data"]["species_label"].unique())
-    st.image(dash.summary_panel(res, tema, LANG, cores_p, "png", 110, sub_p), width="stretch")
+    import streamlit.components.v1 as components     # iframe: keeps the SVG figures and hovers
+    components.html('<body style="margin:0">' + dash.panel_html(res, tema, LANG, cores_p, sub_p) + "</body>",
+                    height=730, scrolling=True)
     d1, d2 = st.columns(2)
     d1.download_button(t("dashboard.png"), dash.summary_panel(res, tema, LANG, cores_p, "png", dpi_p, sub_p),
                        file_name=f"MangueTREE_painel_{plot_name}.png", mime="image/png", type="primary")
@@ -162,7 +164,7 @@ with tabs[0]:
              (L("complexity_2_5"), N(res["complexity"]["dbh_gt_2.5"]["ci"], 2)),
              (L("complexity_10"), N(res["complexity"]["dbh_gt_10"]["ci"], 2)),
              (L("n_species_live"), f"{r['n_species_live']}"))
-    for linha in (cards[0:4], cards[4:8], cards[8:12]):
+    for linha in (cards[0:6], cards[6:12]):
         for col, (lab, val) in zip(st.columns(len(linha)), linha):
             col.metric(lab, val, border=True)
     st.caption(t("method.heights_live_only"))
@@ -221,7 +223,8 @@ with tabs[1]:
         if "ivi" not in ivi.columns:
             st.caption(t("method.ivi_needs_units"))
         st.markdown(t("phyto.legend"))
-        fig = ui.fig_ivi(ivi, estilos, LANG)
+        pct_f = st.checkbox(t("single.as_pct"), value=False, key="pct_fito")
+        fig = ui.fig_phyto_100(ivi, estilos, LANG) if pct_f else ui.fig_ivi(ivi, estilos, LANG)
         if fig:
             st.plotly_chart(fig, width="stretch", config=ui.PLOT_CONFIG)
     st.divider()
@@ -238,7 +241,8 @@ with tabs[2]:
     st.caption(t("method.dbh_classes"))
     metrica = st.radio(t("single.metric"), ("density", "basal_area"), horizontal=True, key="metrica_unica",
                        format_func=lambda k: t(f"metric.{k}", LANG))
-    fig_cl = ui.fig_classes_dap(res["dbh_density"], res["dbh_ba"], estilos, metrica, LANG)
+    pct_c = st.checkbox(t("single.as_pct"), value=False, key="pct_classes")
+    fig_cl = ui.fig_classes_dap(res["dbh_density"], res["dbh_ba"], estilos, metrica, LANG, pct=pct_c)
     if fig_cl:
         st.plotly_chart(fig_cl, width="stretch", config=ui.PLOT_CONFIG)
     c1_, c2_ = st.columns(2)

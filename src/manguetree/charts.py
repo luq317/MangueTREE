@@ -349,12 +349,34 @@ def fig_ivi(tab, estilos, lang=None):
     return _layout(fig, estilos, titulo)
 
 
-def fig_classes_dap(dens_cl, domi_cl, estilos, metrica="density", lang=None):
-    """Distribuição por classes de DAP (barras empilhadas por espécie)."""
+def fig_phyto_100(tab, estilos, lang=None):
+    """Each relative value (DeR%, DoR%, FR%) as one 100% column split by species."""
+    if tab is None or tab.empty:
+        return None
+    lang = _lang(lang)
+    comps = [c for c in ["rel_density", "rel_dominance", "rel_frequency"] if c in tab.columns]
+    cmap = species_colors(tab["species"].unique())
+    fig = go.Figure()
+    for _, row in tab.sort_values(comps[-1], ascending=False).iterrows():
+        vals = [row[c] for c in comps]
+        fig.add_trace(go.Bar(x=[label(c, lang) for c in comps], y=vals, name=species_name(row["species"], lang),
+                             marker_color=cmap[row["species"]],
+                             text=[num(v, 1, lang) for v in vals], textposition="inside"))
+    fig.update_layout(barmode="stack", yaxis_title="%")
+    fig.update_yaxes(range=[0, 100], ticksuffix="%")
+    return _layout(fig, estilos, i18n.t("chart.phyto_100", lang))
+
+
+def fig_classes_dap(dens_cl, domi_cl, estilos, metrica="density", lang=None, pct=False):
+    """Distribuição por classes de DAP (barras empilhadas por espécie); ``pct=True``:
+    cada classe soma 100% (contribuição de cada espécie na classe)."""
     lang = _lang(lang)
     df = dens_cl if metrica == "density" else domi_cl
     if df is None or df.empty:
         return None
+    if pct:
+        tot = df.sum(axis=1).replace(0, np.nan)
+        df = df.div(tot, axis=0).mul(100).fillna(0)
     sp, val = label("species", lang), "value"
     dfp = df.reset_index().melt(id_vars="dbh_class", var_name=sp, value_name=val)
     dfp[sp] = dfp[sp].map(lambda v: species_name(v, lang))
@@ -364,6 +386,9 @@ def fig_classes_dap(dens_cl, domi_cl, estilos, metrica="density", lang=None):
     fig = px.bar(dfp, x="dbh_class", y=val, color=sp, color_discrete_map=cmap,
                  barmode="stack", labels={"dbh_class": cls, val: label("value", lang)})
     ylab = label("density_ha" if metrica == "density" else "ba_ha", lang)
+    if pct:
+        ylab = i18n.t("temporal.chart.stack100", lang) + " · " + ylab
+        fig.update_yaxes(range=[0, 100], ticksuffix="%")
     fig.update_layout(xaxis_title=cls, yaxis_title=ylab)
     name = i18n.t("metric.density" if metrica == "density" else "metric.basal_area", lang)
     return _layout(fig, estilos, i18n.t("chart.dbh_classes", lang, metric=name))
@@ -439,7 +464,7 @@ def fig_altura_dap(res, estilos, lang=None, species=None):
     return _layout(fig, estilos, i18n.t("chart.height_dbh", lang)), detalhes
 
 
-PROFILE_KINDS = ("stems", "strata", "violin", "bubbles")
+PROFILE_KINDS = ("bubbles", "stems", "strata", "violin")
 
 
 def fig_perfil_vertical(res, estilos, lang=None, kind="bubbles", strata_width=1.0):
@@ -481,9 +506,21 @@ def fig_perfil_vertical(res, estilos, lang=None, kind="bubbles", strata_width=1.
     fig.update_layout(xaxis_title=i18n.t("chart.trees_by_height", lang),
                       yaxis_title=label("height", lang),
                       xaxis_showticklabels=False)
-    fig.add_annotation(text=i18n.t("chart.bubble_is_dbh", lang), xref="paper", yref="paper",
-                       x=0, y=1.0, xanchor="left", yanchor="bottom", showarrow=False,
-                       font=dict(size=10, color="#5F726A"))
+    # size legend: reference circles of 5, 10 and 20 cm DBH in the lower right corner,
+    # which is always empty (the trees are sorted by height)
+    n = len(dd)
+    ref = [5, 10, 20]
+    ytop = float(dd["height"].min()) + 0.12 * float(dd["height"].max() - dd["height"].min() or 1)
+    xs = [n * 0.80 + i * max(n * 0.06, 2) for i in range(len(ref))]
+    fig.add_trace(go.Scatter(x=xs, y=[ytop] * len(ref), mode="markers+text",
+                             marker=dict(size=ref, sizemode="diameter", color="rgba(0,0,0,0)",
+                                         line=dict(color="#5F726A", width=1.2)),
+                             text=[f"{v} cm" for v in ref], textposition="bottom center",
+                             textfont=dict(size=9, color="#5F726A"), hoverinfo="skip",
+                             showlegend=False))
+    fig.add_annotation(x=xs[len(xs) // 2], y=ytop, yshift=26, text=i18n.t("chart.bubble_is_dbh", lang),
+                       showarrow=False, font=dict(size=10, color="#5F726A"))
+    fig.update_xaxes(range=[-2, max(n, xs[-1]) + 3])
     return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
 
 
@@ -519,10 +556,12 @@ def _perfil_alt(res, dd, estilos, lang, kind, strata_width):
         fig.update_layout(barmode="stack", xaxis_title=i18n.t("chart.n_stems", lang),
                           yaxis_title=i18n.t("chart.height_class", lang))
         return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
-    else:  # violin
+    else:  # violin: only species with at least two heights
         for raw in dd["species_label"].unique():
             esp = species_name(raw, lang)
             sub = dd[dd["species_label"] == raw]
+            if sub["height"].notna().sum() < 2:
+                continue
             fig.add_trace(go.Violin(x=[esp] * len(sub), y=sub["height"], name=esp, box_visible=True,
                                     meanline_visible=True, line_color=cmap.get(esp, "#555"),
                                     points="all", pointpos=0, jitter=0.3, marker_size=3))
@@ -558,7 +597,42 @@ def fig_dbh_height_plots(df_param, estilos, lang=None):
     return _layout(fig, estilos, i18n.t("chart.dbh_height_plots", lang))
 
 
-def fig_free_compare(df_param, estilos, mode, a, b=None, lang=None):
+PER_STEM = {"mean_dbh_cm": "dbh", "height_mean_m": "height"}
+
+
+def fig_plot_distribution(resultados, estilos, param, kind="box", lang=None):
+    """Distribution of DBH or height of the live stems of each plot (box or violin)."""
+    lang = _lang(lang)
+    col = PER_STEM[param]
+    frames = []
+    for r in resultados:
+        d = r["data"]
+        dd = d[d["live"] & (d["dbh"] > 0)][[col]].dropna()
+        dd = dd[dd[col] > 0]
+        dd["plot"] = r["plot_name"]
+        frames.append(dd)
+    cons = pd.concat(frames, ignore_index=True)
+    f = px.violin if kind == "violin" else px.box
+    extra = dict(box=True, points="all") if kind == "violin" else {}
+    fig = f(cons, x="plot", y=col, color="plot", color_discrete_sequence=estilos["paleta"],
+            labels={"plot": label("plot", lang), col: label(col, lang)}, **extra)
+    fig.update_layout(showlegend=False, yaxis_title=label(col, lang))
+    return _layout(fig, estilos, label(col, lang))
+
+
+def fig_free_compare(df_param, estilos, mode, a, b=None, lang=None, kind="bar", resultados=None):
+    if mode == "single" and kind in ("box", "violin") and a in PER_STEM and resultados:
+        return fig_plot_distribution(resultados, estilos, a, kind, lang)
+    if mode == "single" and kind == "line":
+        lang = _lang(lang)
+        fig = go.Figure(go.Scatter(x=df_param["plot"], y=df_param[a], mode="lines+markers",
+                                   line=dict(color=estilos["paleta"][0])))
+        fig.update_layout(xaxis_title=label("plot", lang), yaxis_title=label(a, lang))
+        return _layout(fig, estilos, label(a, lang))
+    return _fig_free_compare(df_param, estilos, mode, a, b, lang)
+
+
+def _fig_free_compare(df_param, estilos, mode, a, b=None, lang=None):
     """Free comparison of the plots: ``mode`` "single" (bars of ``a``), "dual" (bars of
     ``a`` on the left axis, line of ``b`` on the right) or "xy" (``a`` against ``b``)."""
     from plotly.subplots import make_subplots
@@ -1273,8 +1347,10 @@ def fig_species_live_dead(df_esp, estilos, metric, chart="stack", show_values=Fa
     if chart == "stack100":
         fig.update_yaxes(range=[0, 100], ticksuffix="%")
     fig = _layout(fig, estilos, i18n.t(f"temporal.metric.{metric}", lang))
+    # fixed frame, so two of these side by side have the same size
     fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.22, x=0.5, xanchor="center"),
-                      margin=dict(b=120))
+                      margin=dict(t=46, r=24, b=130, l=80), height=480)
+    fig.update_yaxes(automargin=False)
     return _year_axis(fig, df, gaps)
 
 

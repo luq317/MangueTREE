@@ -278,11 +278,11 @@ with tabs[1]:
         with c1_:
             opcoes_e = list(ui.LIVE_DEAD_METRICS) + list(mc.SPECIES_METRICS)
             met_e = st.selectbox(t("temporal.species_metric"), opcoes_e,
-                                 index=opcoes_e.index("density_live_ha"),
+                                 index=opcoes_e.index("live_dead_ba"),
                                  key="met_esp_temp", format_func=lambda c: ui.label(c, LANG))
         with c2_:
             tipo = st.radio(t("temporal.chart"), ("line", "bar", "stack", "stack100"),
-                            index=3, key="tipo_esp_temp", horizontal=True,
+                            index=2, key="tipo_esp_temp", horizontal=True,
                             format_func=lambda k: t(f"temporal.chart.{k}"))
         with c3_:
             valores = st.checkbox(t("temporal.show_values"), value=False, key="val_esp_temp")
@@ -298,7 +298,7 @@ with tabs[1]:
             base_e = df_esp[df_esp["plot"] == escolha]
         fig_e = ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG, GAPS)
         if fig_e:
-            st.plotly_chart(fig_e, width="stretch", config=ui.PLOT_CONFIG)
+            st.plotly_chart(fig_e, width="stretch", config=ui.PLOT_CONFIG, key="fig_esp_temp")
         # the table below shows the same data as the chart, and says so
         cols_tab = list(ui.LIVE_DEAD_METRICS[met_e][:2]) if met_e in ui.LIVE_DEAD_METRICS else [met_e]
         nome_parcela = t("temporal.all_plots_mean") if escolha == "__mean__" else escolha
@@ -331,7 +331,7 @@ with tabs[2]:
     for col_, met_ in ((cm1, "live_dead_density"), (cm2, "live_dead_ba")):
         f_ = ui.fig_species_series(base_m, estilos, met_, "stack", False, LANG, GAPS)
         if f_:
-            col_.plotly_chart(f_, width="stretch", config=ui.PLOT_CONFIG)
+            col_.plotly_chart(f_, width="stretch", config=ui.PLOT_CONFIG, key=f"mort_{met_}")
     st.caption(t("temporal.no_dbh_note"))
     cols_nd = ["plot", "year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"] if MULTI else \
         ["year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"]
