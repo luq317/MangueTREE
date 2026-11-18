@@ -17,7 +17,24 @@ MangueTREE is a Python engine and a Streamlit app for the structural and phytoso
 - Interface and exports in English and Portuguese.
 - Species table for the Neotropics (ten taxa, four regions) that users can edit and extend.
 
-## Installation
+## Download
+
+The easiest way to use MangueTREE is the desktop app. It needs no Python and no command line.
+
+| System | Download |
+|---|---|
+| Windows 10 or 11 | [MangueTREE-Windows.zip](https://github.com/luq317/MangueTREE/releases/latest/download/MangueTREE-Windows.zip) |
+| macOS | [MangueTREE-macOS.zip](https://github.com/luq317/MangueTREE/releases/latest/download/MangueTREE-macOS.zip) |
+
+All versions and their notes are on the [Releases page](https://github.com/luq317/MangueTREE/releases).
+
+**Windows.** Unzip the file, open the `MangueTREE` folder and double-click `MangueTREE.exe`. If Windows shows "Windows protected your PC", click *More info* and then *Run anyway* (the app is not signed with a paid certificate).
+
+**macOS.** Unzip the file and move `MangueTREE.app` to the Applications folder. The first time, right-click the app and choose *Open*, then confirm *Open* again (the app is not notarised by Apple). After that it opens with a double-click.
+
+The app opens in your web browser, but it runs on your computer and works offline. Your spreadsheets are not sent anywhere. To close it, use the *Quit MangueTREE* button in the sidebar.
+
+## Installation from source (for developers)
 
 MangueTREE needs Python 3.11 or newer.
 
@@ -28,7 +45,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Desktop builds for Windows and macOS (no Python needed) are produced by GitHub Actions; see [docs/installers.md](docs/installers.md).
+How the desktop builds are made is described in [docs/installers.md](docs/installers.md).
 
 ## Quick start
 
@@ -111,17 +128,10 @@ MIT. See [LICENSE.txt](LICENSE.txt).
 
 Bug reports, species additions, translations and code are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
-## Roadmap
-
-- v2.0: aboveground biomass and carbon.
-- Spanish interface.
-- Diversity indices.
-- Plotless methods (point-centred quarter, PCQM).
-
 ## Acknowledgements
 
 We thank the Núcleo de Estudos em Manguezais (NEMA/UERJ) for the example data and FAPERJ for the scholarship of the first author.
 
 ## Contact
 
-Lucas Silva Pereira, Núcleo de Estudos em Manguezais (NEMA), Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro (UERJ), Rio de Janeiro, Brazil. pereira.lucas_1@posgraduacao.uerj.br
+Lucas Silva Pereira, Núcleo de Estudos em Manguezais (NEMA), Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro (UERJ), Rio de Janeiro, Brazil. pereira.lucas_1@posgraduacao.uerj.br · [lucassilva.art](https://lucassilva.art)

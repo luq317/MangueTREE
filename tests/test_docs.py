@@ -29,10 +29,11 @@ def test_required_docs_exist():
 def test_readme_sections():
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     headings = {m.group(2).strip() for m in re.finditer(r"^(#{1,6})\s+(.+)$", text, re.M)}
-    for h in ("Installation", "Quick start", "Input data", "Validation", "Methods",
+    for h in ("Download", "Installation from source (for developers)", "Quick start", "Input data", "Validation", "Methods",
               "How to cite", "License"):
         assert h in headings, h
     assert "docs/images/screenshot.png" in text
+    assert "## Roadmap" not in text
 
 
 def test_readme_library_example_runs(monkeypatch):
