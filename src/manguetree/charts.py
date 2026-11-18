@@ -146,6 +146,8 @@ def label(col, lang=None, data_table=False):
     """Display label of an internal column name in ``lang`` (default: current)."""
     if data_table and col in _DATA_COLUMNS:
         return i18n.t(f"labels.data.{col}", _lang(lang))
+    if not str(col).isidentifier():      # already a display name (e.g. species contribution)
+        return str(col)
     return i18n.t(f"labels.{col}", _lang(lang))
 
 
@@ -695,6 +697,38 @@ def tabela_por_especie(res, lang=None):
     if not tab.empty:
         tab = tab.sort_values(L("ba_live_ha"), ascending=False).reset_index(drop=True)
     return tab
+
+
+def species_shares(res, base="density"):
+    """Contribution (%) of each species to the live and the dead total of ``base``
+    ("density" or "ba"). Returns {(species_label, "live"|"dead"): percent}."""
+    d = res["data"]
+    d = d[d["dbh"].notna() & (d["dbh"] > 0)]
+    out = {}
+    for cond, part in (("live", d[d["live"]]), ("dead", d[~d["live"]])):
+        val = (part.groupby("species_label").size() if base == "density"
+               else part.groupby("species_label")["basal_area_m2"].sum())
+        tot = float(val.sum())
+        for sp, v in val.items():
+            out[(sp, cond)] = 100.0 * float(v) / tot if tot > 0 else 0.0
+    return out
+
+
+def share_column(species, cond, base, lang=None):
+    """Column name of a species contribution, e.g. "% dens. viva - A. schaueriana"."""
+    return i18n.t(f"labels.share_{base}_{cond}", _lang(lang), species=species_name(species, lang))
+
+
+def validation_banner(issues_by_unit, lang=None):
+    """One line above the tabs; the full data check is in its own tab."""
+    import streamlit as st
+    lang = _lang(lang)
+    all_issues = [i for v in issues_by_unit.values() for i in v]
+    n_err, n_warn = issues_counts(all_issues)
+    if not all_issues:
+        st.caption(i18n.t("panel.banner_ok", lang))
+    else:
+        icon_note(st, "verificacao", i18n.t("panel.banner", lang, errors=n_err, warnings=n_warn))
 
 
 def to_excel_bytes(res, lang=None):

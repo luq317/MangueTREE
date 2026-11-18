@@ -15,7 +15,7 @@ from manguetree.validation import validate
 
 st.set_page_config(layout="wide", page_title=t("single.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("estrutura", "fitossociologia", "classes_dap", "altura", "mapa", "exportar"))
+ui.sidebar_nav(st.sidebar, tab_icons=("estrutura", "fitossociologia", "classes_dap", "altura", "mapa", "verificacao", "exportar"))
 ui.topo(t("single.title"), t("single.subtitle"))
 st.markdown(t("single.intro"))
 
@@ -107,9 +107,9 @@ st.success(t("single.processed", n=n_validos, rows=len(df), area=float(area_fina
 plot_name = str(sheet) if sheet_count > 1 else uploaded.name.rsplit(".", 1)[0]
 st.caption(t("single.plot_label", name=plot_name))
 # the panel validates with the same choice for stems without condition as the analysis
-cond_faltante = ui.validation_panel(
-    {"": validate(df, RESOLVER, missing_condition=st.session_state.get("mc_unica", "exclude"))},
-    key="mc_unica", lang=LANG)
+cond_faltante = st.session_state.get("mc_unica", "exclude")
+issues_unica = {"": validate(df, RESOLVER, missing_condition=cond_faltante)}
+ui.validation_banner(issues_unica, LANG)
 res = mc.analyze(df, area_final, RESOLVER, dbh_limits=limites,
                  plot_name=plot_name,
                  class_width=largura_classe, missing_condition=cond_faltante)
@@ -118,30 +118,31 @@ r = res["summary"]
 # ---------------- DASHBOARD ----------------
 N = lambda value, decimals: ui.num(value, decimals, LANG)      # decimal comma in Portuguese
 tabs = st.tabs([t("single.tab.structure"), t("single.tab.phyto"), t("single.tab.classes"),
-                t("single.tab.height"), t("single.tab.map"), t("single.tab.export")])
+                t("single.tab.height"), t("single.tab.map"), t("tab.check"), t("single.tab.export")])
 
 # --- TAB 1: ESTRUTURA ---
 with tabs[0]:
     L = lambda k: ui.label(k, LANG)
     st.subheader(t("single.structural"))
-    a, b, c, d = st.columns(4)
-    a.metric(L("mean_dbh_cm"), N(r["mean_dbh_cm"], 2))
-    a.metric(L("n_species_live"), f"{r['n_species_live']}")
-    b.metric(L("height_mean_m"), N(r["height_mean_m"], 2), f"± {N(r['height_sd_m'], 2)}")
-    b.metric(L("canopy_height_m"), N(r["canopy_height_m"], 2))
-    c.metric(L("density_live_ha"), N(r["density_live_ha"], 0))
-    c.metric(L("stems_per_tree"), N(r["stems_per_tree"], 2))
-    d.metric(L("ba_live_ha"), N(r["ba_live_ha"], 2))
-    d.metric(L("complexity_2_5"), N(res["complexity"]["dbh_gt_2.5"]["ci"], 2))
-    d.metric(L("complexity_10"), N(res["complexity"]["dbh_gt_10"]["ci"], 2))
+    # order asked by the lab: DBH, mean height, canopy, live density, live basal area;
+    # every card has the same size (the SD sits on the value line, not below it)
+    cards = ((L("mean_dbh_cm"), N(r["mean_dbh_cm"], 2)),
+             (L("height_mean_m"), f"{N(r['height_mean_m'], 2)} ± {N(r['height_sd_m'], 2)}"),
+             (L("canopy_height_m"), N(r["canopy_height_m"], 2)),
+             (L("density_live_ha"), N(r["density_live_ha"], 0)),
+             (L("ba_live_ha"), N(r["ba_live_ha"], 2)),
+             (L("ba_total_ha"), N(r["ba_total_ha"], 2)),
+             (L("mortality_stems_pct"), N(r["mortality_stems_pct"], 1)),
+             (L("mortality_ba_pct"), N(r["mortality_ba_pct"], 1)),
+             (L("stems_per_tree"), N(r["stems_per_tree"], 2)),
+             (L("complexity_2_5"), N(res["complexity"]["dbh_gt_2.5"]["ci"], 2)),
+             (L("complexity_10"), N(res["complexity"]["dbh_gt_10"]["ci"], 2)),
+             (L("n_species_live"), f"{r['n_species_live']}"))
+    for linha in (cards[0:4], cards[4:8], cards[8:12]):
+        for col, (lab, val) in zip(st.columns(len(linha)), linha):
+            col.metric(lab, val, border=True)
     st.caption(t("method.heights_live_only"))
     st.caption(t("method.mean_dbh"))
-
-    st.divider()
-    e, f, g = st.columns(3)
-    e.metric(L("ba_total_ha"), N(r["ba_total_ha"], 2))
-    f.metric(L("mortality_stems_pct"), N(r["mortality_stems_pct"], 1))
-    g.metric(L("mortality_ba_pct"), N(r["mortality_ba_pct"], 1))
 
     st.divider()
     st.subheader(t("single.by_genus"))
@@ -163,8 +164,15 @@ with tabs[0]:
             L("ba_dead_ha"): sub[~sub["live"]]["basal_area_m2"].sum() * ft,
         })
     if resumo_gen:
-        st.dataframe(pd.DataFrame(resumo_gen).set_index(L("genus"))
-                     .style.format("{:.2f}"), width="stretch")
+        tg = pd.DataFrame(resumo_gen).set_index(L("genus"))
+        # contribution (%) of each genus next to each value
+        cols = []
+        for c_ in list(tg.columns):
+            tot = tg[c_].sum()
+            tg[c_ + " (%)"] = 100 * tg[c_] / tot if tot > 0 else 0.0
+            cols += [c_, c_ + " (%)"]
+        tg = tg[cols]
+        st.dataframe(tg.style.format(lambda v: N(v, 2)), width="stretch")
 
     with st.expander(t("method.holdridge_title")):
         st.write(t("method.holdridge"))
@@ -272,8 +280,12 @@ with tabs[4]:
     else:
         st.info(t("map.no_coordinates"))
 
-# --- TAB 6: EXPORTAÇÃO ---
+# --- TAB 6: VERIFICAÇÃO DOS DADOS ---
 with tabs[5]:
+    ui.validation_panel(issues_unica, key="mc_unica", lang=LANG)
+
+# --- TAB 7: EXPORTAÇÃO ---
+with tabs[6]:
     st.subheader(t("single.export"))
     nome = res["plot_name"]
     # Relatório PDF gerado uma vez por configuração (download em 1 clique)

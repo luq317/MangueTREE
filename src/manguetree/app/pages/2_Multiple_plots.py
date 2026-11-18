@@ -17,7 +17,7 @@ from manguetree.i18n import t
 
 st.set_page_config(layout="wide", page_title=t("multi.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "fitossociologia", "especies", "mapa", "exportar"))
+ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "fitossociologia", "especies", "mapa", "verificacao", "exportar"))
 ui.topo(t("multi.title"), t("multi.subtitle"))
 st.markdown(t("multi.intro"))
 st.caption(t("multi.see_temporal"))
@@ -113,33 +113,45 @@ if ignoradas:
         f"{a} ({t('sheets.reason.' + m)})" for a, m in ignoradas.items()))
 problemas = st.session_state.get("multi_issues", {})
 SHEET = t("labels.sheet")
-ui.validation_panel(problemas, SHEET, key="mc_multi", lang=LANG)
+ui.validation_banner(problemas, LANG)
 df_problemas = ui.issues_frame_by_unit(problemas, SHEET, LANG)
 
 # ---------------- TABELA COMPARATIVA ----------------
+share_base = st.session_state.get("multi_share_base", "density")
+especies_todas = sorted({sp for res in resultados for (sp, _c) in ui.species_shares(res, share_base)},
+                        key=lambda s: (s == mc.UNIDENTIFIED_LABEL, s))
 linhas = []
 for res in resultados:
     r = res["summary"]
-    linhas.append({
+    linha = {       # order asked by the lab; number of species last
         "plot": res["plot_name"],
         "plot_area_m2": r["plot_area_m2"],
-        "n_species_live": r["n_species_live"],
-        "density_live_ha": r["density_live_ha"],
-        "ba_live_ha": r["ba_live_ha"],
         "mean_dbh_cm": r["mean_dbh_cm"],
         "height_mean_m": r["height_mean_m"],
         "canopy_height_m": r["canopy_height_m"],
+        "density_live_ha": r["density_live_ha"],
+        "ba_live_ha": r["ba_live_ha"],
+    }
+    shares = ui.species_shares(res, share_base)
+    for cond in ("live", "dead"):
+        for sp in especies_todas:
+            linha[ui.share_column(sp, cond, share_base, LANG)] = shares.get((sp, cond), 0.0)
+    linha.update({
+        "mortality_stems_pct": r["mortality_stems_pct"],
         "complexity_2_5": res["complexity"]["dbh_gt_2.5"]["ci"],
         "complexity_10": res["complexity"]["dbh_gt_10"]["ci"],
-        "mortality_stems_pct": r["mortality_stems_pct"],
+        "n_species_live": r["n_species_live"],
     })
+    linhas.append(linha)
 df_param = ui.integer_counts(pd.DataFrame(linhas))      # internal column names; shown through ui.for_display
 
 tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.ivi"),
-                t("multi.tab.species"), t("multi.tab.map"), t("multi.tab.export")])
+                t("multi.tab.species"), t("multi.tab.map"), t("tab.check"), t("multi.tab.export")])
 
 with tabs[0]:
     st.subheader(t("multi.params_by_plot"))
+    st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
+             format_func=lambda b: t(f"multi.share.{b}"))
     _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
     st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
     st.divider()
@@ -225,6 +237,9 @@ with tabs[3]:
         st.info(t("map.no_coordinates"))
 
 with tabs[4]:
+    ui.validation_panel(problemas, SHEET, key="mc_multi", lang=LANG)
+
+with tabs[5]:
     st.subheader(t("multi.export"))
     # IVI agregado e contribuição por espécie (para o relatório)
     ivi_all = mc.pooled_importance(resultados)

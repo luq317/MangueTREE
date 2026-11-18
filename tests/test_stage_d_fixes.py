@@ -112,7 +112,7 @@ def test_demo_file_with_errors_triggers_the_expected_checks():
 def test_map_and_export_are_separate_tabs_last_on_every_analysis_page():
     at = _upload("1_Single_plot.py", "t2.xlsx", (ROOT / "data" / "guaratiba_T2_2009.xlsx").read_bytes())
     labels = [tb.label for tb in at.tabs]
-    assert labels[-2:] == [t("single.tab.map", "en"), t("single.tab.export", "en")]
+    assert labels[-3:] == [t("single.tab.map", "en"), t("tab.check", "en"), t("single.tab.export", "en")]
     assert not any("&" in lb and "export" in lb.lower() for lb in labels)
     # the single plot has no cover value: only relative density and dominance
     assert not any("cover" in str(df.value.columns).lower() for df in at.dataframe)

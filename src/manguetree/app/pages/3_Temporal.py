@@ -23,7 +23,7 @@ from manguetree.validation import Issue
 
 st.set_page_config(layout="wide", page_title=t("temporal.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "especies", "mortalidade", "serie", "exportar"))
+ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "especies", "mortalidade", "serie", "verificacao", "exportar"))
 ui.topo(t("temporal.title"), t("temporal.subtitle"))
 st.markdown(t("temporal.intro"))
 
@@ -181,11 +181,12 @@ st.success(t("temporal.analysed", n=len(df_serie), first=int(df_serie["year"].mi
              last=int(df_serie["year"].max())))
 problemas = st.session_state.get("temp_issues", {})
 UNITS = (t("labels.year"), t("labels.sheet"))
-ui.validation_panel(problemas, UNITS, key="mc_temp", lang=LANG)
+ui.validation_banner(problemas, LANG)
 df_problemas = ui.issues_frame_by_unit(problemas, UNITS, LANG)
 
 tabs = st.tabs([t("temporal.tab.evolution"), t("temporal.tab.species"),
-                t("temporal.tab.mortality"), t("temporal.tab.series"), t("temporal.tab.export")])
+                t("temporal.tab.mortality"), t("temporal.tab.series"), t("tab.check"),
+                t("temporal.tab.export")])
 
 with tabs[0]:
     st.subheader(t("temporal.evolution"))
@@ -259,6 +260,9 @@ with tabs[3]:
     st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
 
 with tabs[4]:
+    ui.validation_panel(problemas, UNITS, key="mc_temp", lang=LANG)
+
+with tabs[5]:
     st.subheader(t("temporal.export"))
     sig = ("temp", tuple(df_serie["year"].tolist()), cfg_sig, LANG, show_seal)
     if st.session_state.get("pdf_sig_temp") != sig:
