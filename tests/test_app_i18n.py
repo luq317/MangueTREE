@@ -226,7 +226,7 @@ def test_branding_citation_and_about():
         at.session_state["lang"] = lang
         at.run()
         body = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.code)
-        for needle in ("Tatiane Costa da Matta", "Filipe de Oliveira Chaves", "Mário Luiz Gomes Soares", "MIT",
+        for needle in ("Laiza Lacerda Motta", "Tatiane Costa da Matta", "Filipe de Oliveira Chaves", "Mário Luiz Gomes Soares", "MIT",
                        "pereira.lucas_1@posgraduacao.uerj.br", branding.CITATION,
                        branding.REPO_URL):
             assert needle in body, (lang, needle)

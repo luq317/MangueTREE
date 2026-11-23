@@ -44,7 +44,8 @@ def test_no_private_lab_files():
 def test_license_is_mit_with_authors():
     text = (ROOT / "LICENSE.txt").read_text(encoding="utf-8")
     assert "MIT License" in text
-    assert ("Copyright (c) 2026 Lucas Silva Pereira, Tatiane Costa da Matta, "
+    assert ("Copyright (c) 2026 Lucas Silva Pereira, Laiza Lacerda Motta, "
+            "Tatiane Costa da Matta, "
             "Filipe de Oliveira Chaves, "
             "Mário Luiz Gomes Soares") in text
 
