@@ -284,3 +284,22 @@ def test_box_outline_is_thin_and_in_the_axis_colour():
     app = px.box(x=["a", "b"], y=[1, 2], color=["a", "b"])
     pa.outline_boxes(app)
     assert all(t.line.color == theme.AXIS for t in app.data)
+
+
+def test_app_map_is_interactive_with_dark_and_satellite_modes():
+    import json
+    from manguetree import charts
+    co = pd.DataFrame({"plot": ["F2", "H2"], "lat": [-23.0, -23.002], "lon": [-43.6, -43.598]})
+    dark = charts.location_deck(co, "dark")
+    sat = charts.location_deck(co, "satellite")
+    assert "dark" in dark.map_style
+    assert isinstance(sat.map_style, str) and sat.map_style.startswith("data:application/json")
+    assert "World_Imagery" in __import__("urllib.parse").parse.unquote(sat.map_style)
+    for deck in (dark, sat):
+        spec = json.loads(deck.to_json())
+        for layer in spec["layers"]:
+            for k, v in layer.items():   # pydeck turns plain strings into expressions: only accessors may be
+                if isinstance(v, str) and v.startswith("@@="):
+                    assert k.startswith("get"), (layer["@@type"], k, v)
+        sc = next(l for l in spec["layers"] if l["@@type"] == "ScatterplotLayer")
+        assert sc["radiusMaxPixels"] <= 8                    # small dots, never huge circles

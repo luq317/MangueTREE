@@ -1790,19 +1790,59 @@ def batch_png_button(container, dpi, zip_name="MangueTREE_figuras.zip"):
 
 
 
-_LOCATION_CACHE = {}
+def location_deck(coords, mode="dark"):
+    """Interactive map (pydeck) of the plots: small pins-as-dots coloured per plot, plot name on
+    hover and as a label. ``mode``: "dark" (dark base map) or "satellite" (Esri imagery)."""
+    import pydeck as pdk
+    from manguetree.reports import basemap, theme
+    c = coords.dropna(subset=["lat", "lon"]).copy()
+    c["lat"] = c["lat"].astype(float); c["lon"] = c["lon"].astype(float)
+    names = c["plot"].astype(str) if "plot" in c.columns else pd.Series([""] * len(c), index=c.index)
+    cmap = theme.plot_color_map(names) if "plot" in c.columns else {}
+    rgb = lambda h: [int(h[i:i + 2], 16) for i in (1, 3, 5)]
+    c["name"] = names
+    c["color"] = [rgb(cmap.get(n, theme.AMBER)) + [235] for n in names]
+    bounds = basemap.padded_bounds(list(c["lat"]), list(c["lon"]))
+    zoom = min(basemap.choose_zoom(bounds, max_side=3), 17)
+    view = pdk.ViewState(latitude=float(c["lat"].mean()), longitude=float(c["lon"].mean()), zoom=zoom)
+    layers = []
+    many = len(c) > 12
+    # sizes in metres with a pixel clamp: pydeck would turn a "pixels" string into an expression
+    layers.append(pdk.Layer("ScatterplotLayer", data=c, get_position="[lon, lat]", get_fill_color="color",
+                            get_line_color=[255, 255, 255], stroked=True, line_width_min_pixels=1.2,
+                            get_radius=1, radius_min_pixels=3 if many else 6, radius_max_pixels=3 if many else 7,
+                            pickable=True))
+    if not many:
+        layers.append(pdk.Layer("TextLayer", data=c, get_position="[lon, lat]", get_text="name", get_size=13,
+                                get_color=[255, 255, 255], get_pixel_offset=[0, -16],
+                                font_weight=700,
+                                font_settings={"sdf": True}, outline_width=3, outline_color=[0, 0, 0, 200]))
+    return pdk.Deck(layers=layers, initial_view_state=view,
+                    map_style=_satellite_style_url() if mode == "satellite" else "dark",
+                    tooltip={"text": "{name}"} if "plot" in c.columns else None)
+
+
+def _satellite_style_url():
+    """The satellite style as a data URL (Streamlit takes the map style only as text)."""
+    import json
+    import urllib.parse
+    return "data:application/json;charset=utf-8," + urllib.parse.quote(json.dumps(SATELLITE_STYLE))
+
+
+# MapLibre style with the Esri World Imagery tiles (no key needed)
+SATELLITE_STYLE = {
+    "version": 8,
+    "sources": {"esri": {"type": "raster", "tileSize": 256, "maxzoom": 19,
+                         "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+                         "attribution": "Esri, Maxar, Earthstar Geographics"}},
+    "layers": [{"id": "esri", "type": "raster", "source": "esri"}],
+}
 
 
 def location_map(st, coords, lang=None):
-    """Plot-location map shown in the app: the very figure the PDF report uses (satellite
-    image with a pin on each plot). Falls back to the plain coordinate plot offline."""
-    from manguetree.reports import maps, theme
+    """Plot-location map of the app: interactive (zoom and pan), dark base map or satellite."""
+    from manguetree import i18n as _i
     lang = _lang(lang)
-    key = (lang, tuple(map(tuple, coords[[c for c in ("lat", "lon", "plot") if c in coords.columns]].astype(str).values)))
-    if key not in _LOCATION_CACHE:
-        cmap = theme.plot_color_map(coords["plot"]) if "plot" in coords.columns else None
-        _LOCATION_CACHE.clear()
-        _LOCATION_CACHE[key] = maps.location_png(coords, lang, cmap, dpi=170)
-    png = _LOCATION_CACHE[key]
-    if png:
-        st.image(png, use_container_width=True)
+    modes = {"dark": _i.t("map.mode_dark", lang), "satellite": _i.t("map.mode_satellite", lang)}
+    mode = st.radio(_i.t("map.mode", lang), list(modes), format_func=modes.get, horizontal=True, key="map_mode")
+    st.pydeck_chart(location_deck(coords, mode), height=520)
