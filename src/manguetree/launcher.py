@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # MangueTREE: structural analysis of mangrove forest plots.
-# Copyright (c) 2026 Lucas Silva Pereira, Laiza Lacerda Motta, Tatiane Costa da Matta,
-# Filipe de Oliveira Chaves, Mário Luiz Gomes Soares.
+# Copyright (c) 2026 The MangueTREE authors (see README.md and CITATION.cff).
 #
 # This program is free software: you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
