@@ -7,7 +7,7 @@ MangueTREE reads field tables with one row per stem. This page describes the acc
 - **Excel (`.xlsx`).** One sheet per plot (multiple-plot analysis) or one sheet per survey (temporal analysis; one workbook per plot, several workbooks can be analysed together). The data template on the home page has the expected layout. The single-plot page reads one sheet at a time; with several sheets, you choose which one.
 - **CSV or TXT.** One plot per file, header on the first line, `;` as the default delimiter (you can change it in the app). UTF-8 and Windows-1252 encodings are accepted. A CSV file has no header lines, so the plot area is given in the app.
 
-The example files in `data/` show the layout; see [data/README.md](../data/README.md).
+The example files in `data/` show the layout; see [data/README.md](https://github.com/luq317/MangueTREE/blob/main/data/README.md).
 
 ## Sheet layout
 

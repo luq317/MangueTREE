@@ -1,5 +1,11 @@
 # MangueTREE
 
+[![Tests](https://github.com/luq317/MangueTREE/actions/workflows/tests.yml/badge.svg)](https://github.com/luq317/MangueTREE/actions/workflows/tests.yml)
+[![Docs](https://img.shields.io/badge/docs-luq317.github.io%2FMangueTREE-2e7d6b)](https://luq317.github.io/MangueTREE/)
+[![Release](https://img.shields.io/github/v/release/luq317/MangueTREE)](https://github.com/luq317/MangueTREE/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+
 MangueTREE is a Python engine and a Streamlit app for the structural and phytosociological analysis of mangrove forest plots. It reads field spreadsheets (one row per stem) and computes density, basal area, mean DBH, tree height, mortality, relative density, dominance and frequency, the importance value (IVI), DBH classes and the Holdridge complexity index. It is meant for researchers and managers who survey mangrove plots with the stem-based protocol of Cintrón & Schaeffer-Novelli (1984).
 
 ![MangueTREE single plot analysis](docs/images/screenshot.png)

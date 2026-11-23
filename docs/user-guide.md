@@ -1,10 +1,10 @@
 # User guide
 
-This guide describes the MangueTREE app (version 1.1.0). For the engine as a library, see the Quick start in the [README](../README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
+This guide describes the MangueTREE app (version 1.1.0). For the engine as a library, see the Quick start in the [README](https://github.com/luq317/MangueTREE/blob/main/README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
 
 ## Starting the app
 
-Desktop builds start with a double-click; see the Download section of the [README](../README.md). From the source code, run `manguetree` (or `streamlit run src/manguetree/app/Home.py`) and open `http://localhost:8501` if the browser does not open by itself.
+Desktop builds start with a double-click; see the Download section of the [README](https://github.com/luq317/MangueTREE/blob/main/README.md). From the source code, run `manguetree` (or `streamlit run src/manguetree/app/Home.py`) and open `http://localhost:8501` if the browser does not open by itself.
 
 The app opens in Portuguese. The language selector (flag) at the top of the sidebar switches to English; the choice is kept between pages and applies to tables, figures and exports. Below it, the page menu (Home, Single plot, Multiple plots, Temporal, About).
 

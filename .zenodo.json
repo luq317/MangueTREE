@@ -1,0 +1,48 @@
+{
+  "title": "MangueTREE: structural and phytosociological analysis of mangrove forest plots",
+  "upload_type": "software",
+  "license": "MIT",
+  "description": "Python engine and Streamlit app that computes forest structure, phytosociology (relative values and importance value), DBH classes and the Holdridge complexity index from stem-level field data of mangrove plots.",
+  "creators": [
+    {
+      "name": "Pereira, Lucas Silva",
+      "orcid": "0000-0002-1891-7621",
+      "affiliation": "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+    },
+    {
+      "name": "Motta, Laiza Lacerda",
+      "orcid": "0009-0002-2186-0272",
+      "affiliation": "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+    },
+    {
+      "name": "Matta, Tatiane Costa da",
+      "orcid": "0009-0000-4133-5729",
+      "affiliation": "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+    },
+    {
+      "name": "Chaves, Filipe de Oliveira",
+      "orcid": "0000-0001-7114-7585",
+      "affiliation": "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+    },
+    {
+      "name": "Soares, Mário Luiz Gomes",
+      "orcid": "0000-0002-3312-7257",
+      "affiliation": "Núcleo de Estudos em Manguezais, Faculdade de Oceanografia, Universidade do Estado do Rio de Janeiro, Rio de Janeiro, RJ, Brazil"
+    }
+  ],
+  "keywords": [
+    "mangrove",
+    "forest structure",
+    "phytosociology",
+    "importance value",
+    "Holdridge complexity index",
+    "Streamlit"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/luq317/MangueTREE",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

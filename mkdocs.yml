@@ -1,0 +1,24 @@
+site_name: MangueTREE
+site_description: Structural and phytosociological analysis of mangrove forest plots
+site_url: https://luq317.github.io/MangueTREE/
+repo_url: https://github.com/luq317/MangueTREE
+repo_name: luq317/MangueTREE
+theme:
+  name: material
+  palette:
+    primary: teal
+    accent: teal
+nav:
+  - Home: index.md
+  - User guide: user-guide.md
+  - Data format: data-format.md
+  - Methods: methods.md
+  - Desktop installers: installers.md
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
