@@ -122,6 +122,8 @@ def _layout(fig, estilos, titulo=None):
                 exponentformat="none", separatethousands=True)     # 10.000, never 10k
     fig.update_xaxes(showgrid=False, **eixo)
     fig.update_yaxes(showgrid=False, **eixo)
+    from manguetree.reports.plotly_adapter import outline_boxes
+    outline_boxes(fig, "#5F726A", 0.8)          # box / violin: thin outline like the axes
     # the seal (opt-in, sidebar checkbox) is placed by add_seal once the final size and
     # margins are known, in the lower right corner outside the plotting area
     fig.update_layout(meta={"mt_seal": bool(estilos.get("seal"))})
@@ -287,9 +289,10 @@ def for_display(df, data_table=False, lang=None, text_ids=True):
                 bn = names.get(bcol, bcol)
                 out[bn] = out[bn].map(lambda v: i18n.t("common.yes" if v else "common.no", lang)
                                       if isinstance(v, (bool, np.bool_)) else v).astype(object)
-        if text_ids and "tree_id" in df.columns:
-            out[names.get("tree_id", "tree_id")] = out[names.get("tree_id", "tree_id")].map(
-                lambda v: v if pd.isna(v) else str(v)).astype(object)
+        for idcol in ("tree_id", "tag"):
+            if text_ids and idcol in df.columns:
+                out[names.get(idcol, idcol)] = out[names.get(idcol, idcol)].map(
+                    lambda v: v if pd.isna(v) else str(v)).astype(object)
         if "condition" in df.columns:
             cn = names.get("condition", "condition")
             out[cn] = out[cn].map(lambda v: condition_label(v, lang)
@@ -615,6 +618,49 @@ def fig_dbh_height_plots(df_param, estilos, lang=None):
     fig.update_layout(showlegend=False, xaxis_title=label("mean_dbh_cm", lang),
                       yaxis_title=label("height_mean_m", lang))
     return _layout(fig, estilos, i18n.t("chart.dbh_height_plots", lang))
+
+
+def fig_jimenez(df, estilos, lang=None, text="plot", group=None, log=False):
+    """Live stem density (y) against mean DBH (x) of each plot (or plot and year), over the
+    theoretical curve of Jimenez et al. (1985). ``df`` needs mean_dbh_cm and density_live_ha;
+    ``text`` is the label column and ``group`` the column that sets the colour (default: text)."""
+    lang = _lang(lang)
+    d = df[(df["mean_dbh_cm"] > 0) & (df["density_live_ha"] > 0)]
+    if d.empty:
+        return None
+    group = group or text
+    lo, hi = float(d["mean_dbh_cm"].min()), float(d["mean_dbh_cm"].max())
+    x0 = max(1.0, lo * 0.7)
+    x1 = max(hi * 1.15, x0 + 1)
+    xs = np.geomspace(x0, x1, 120) if log else np.linspace(x0, x1, 120)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=xs, y=mc.jimenez_density_ha(xs), mode="lines", name=i18n.t("chart.jimenez_curve", lang),
+                             line=dict(color="#5F726A", width=1.6), hoverinfo="skip"))
+    cores = estilos["paleta"]
+    for i, (g, sub) in enumerate(d.groupby(group, sort=False)):
+        fig.add_trace(go.Scatter(
+            x=sub["mean_dbh_cm"], y=sub["density_live_ha"], mode="markers+text",
+            text=sub[text].astype(str), textposition="top center", name=str(g),
+            marker=dict(size=11, color=cores[i % len(cores)])))
+    fig.update_layout(xaxis_title=label("mean_dbh_cm", lang), yaxis_title=label("density_live_ha", lang))
+    if log:
+        fig.update_xaxes(type="log")
+        fig.update_yaxes(type="log")
+    return _layout(fig, estilos, i18n.t("chart.jimenez", lang))
+
+
+def show_jimenez(container, df, estilos, key, lang=None, text="plot", group=None):
+    """Subheader, log option, chart and note of the Jimenez et al. (1985) comparison."""
+    import streamlit as st
+    T = i18n.t
+    container.subheader(T("chart.jimenez_title", lang))
+    log = container.checkbox(T("chart.jimenez_log", lang), value=False, key=f"jim_log_{key}")
+    fig = fig_jimenez(df, estilos, lang, text, group, log)
+    if fig is None:
+        container.info(T("chart.jimenez_nodata", lang))
+        return
+    show(container, fig, key, estilos)
+    container.caption(T("chart.jimenez_note", lang))
 
 
 PER_STEM = {"mean_dbh_cm": "dbh", "height_mean_m": "height"}
@@ -1133,8 +1179,9 @@ def validation_panel(issues_by_unit, unit_label=None, key="missing_cond", lang=N
     if not all_issues:
         st.success(T("panel.ok"))
         return choice
-    st.dataframe(issues_frame_by_unit(issues_by_unit, unit_label, lang),
-                 width="stretch", hide_index=True)
+    shown = issues_frame_by_unit(issues_by_unit, unit_label, lang)
+    shown = shown.apply(lambda c: c.map(str) if c.dtype == object else c)   # ids: numbers and text mixed
+    st.dataframe(shown, width="stretch", hide_index=True)
     if any(i.kind == "dbh_without_condition" for i in all_issues):
         choice = st.radio(T("panel.radio"), list(MISSING_CONDITION_CHOICES),
                           format_func=lambda c: T(f"panel.missing.{c}"), horizontal=True,
@@ -1160,17 +1207,34 @@ def seal_checkbox(container):
 PAGE_ICON = str(Path(__file__).parent / "app" / "assets" / "logo.png")
 NAV_PAGES = (("Home.py", "nav.home"), ("pages/1_Single_plot.py", "nav.single"),
              ("pages/2_Multiple_plots.py", "nav.multiple"), ("pages/3_Temporal.py", "nav.temporal"),
-             ("pages/4_About.py", "nav.about"))
+             ("pages/5_Colonizacao.py", "nav.colonizacao"), ("pages/4_About.py", "nav.about"))
 
 
-def sidebar_nav(container, tab_icons=()):
+def colonizacao_enabled():
+    """The colonization page is a preview: it only shows up when the environment variable
+    MANGUETREE_COLONIZACAO is 1/true or the app secret ``colonizacao`` is true (Streamlit
+    Cloud: App settings, Secrets). Without either, the menu entry is hidden."""
+    import os
+    if str(os.environ.get("MANGUETREE_COLONIZACAO", "")).strip().lower() in ("1", "true", "yes", "sim"):
+        return True
+    try:
+        import streamlit as st
+        return str(st.secrets.get("colonizacao", "")).strip().lower() in ("1", "true", "yes", "sim")
+    except Exception:
+        return False
+
+
+def sidebar_nav(container, tab_icons=(), subtab_icons=()):
     """Page menu with translated names and the MangueTREE icons (icons.css). Streamlit's
     automatic menu (built from the file names) is turned off in .streamlit/config.toml
     (showSidebarNavigation). ``tab_icons``: icon names of the page's tabs, in order."""
     import streamlit as st
     from manguetree import icons
-    st.html(icons.css(tab_icons))
+    st.html(icons.css(tab_icons, subtab_icons))
+    reset_report_figs()                       # the charts of this run feed the PDF report
     for page, key in NAV_PAGES:
+        if "Colonizacao" in page and not colonizacao_enabled():
+            continue
         try:
             container.page_link(page, label=i18n.t(key))
         except Exception:        # outside a multipage run (unit tests of a single page)
@@ -1545,6 +1609,66 @@ def st_slider(label_, lo, hi, default, key, help_=None, step=1):
     return st.slider(label_, lo, hi, default, key=key, help=help_, step=step)
 
 
+# ---------------------------------------------------------------------------
+# Charts of the page, kept as they are on screen for the PDF report
+# ---------------------------------------------------------------------------
+def reset_report_figs():
+    import streamlit as st
+    st.session_state["_rep_figs"] = {}
+    st.session_state["_rep_sec"] = ""
+
+
+def report_section(label):
+    """Name of the section (the tab) that the next charts belong to in the PDF."""
+    import streamlit as st
+    st.session_state["_rep_sec"] = str(label)
+
+
+def _register_fig(key, fig):
+    import streamlit as st
+    figs = st.session_state.setdefault("_rep_figs", {})
+    figs[key] = {"key": key, "section": st.session_state.get("_rep_sec", ""), "json": fig.to_json()}
+
+
+def report_figures():
+    """Charts drawn in the current run, in page order: [{"key", "section", "json"}]."""
+    import streamlit as st
+    return list(st.session_state.get("_rep_figs", {}).values())
+
+
+def figures_signature():
+    import hashlib
+    h = hashlib.sha1()
+    for f in report_figures():
+        h.update(f["key"].encode()); h.update(f["json"].encode())
+    return h.hexdigest()
+
+
+def pdf_block(container, name, build, file_name, sig, lang=None):
+    """"Prepare PDF" button + download. ``build(figures)`` returns the PDF bytes; it runs
+    only on click, with the charts as they are on screen. A PDF made before the charts or
+    the settings changed is flagged as out of date."""
+    import streamlit as st
+    T = i18n.t
+    k = f"pdfx_{name}"
+    full = (sig, figures_signature())
+    if container.button(T("export.pdf_prepare"), key=f"{k}_btn"):
+        with st.spinner(T("export.preparing_pdf_all")):
+            try:
+                st.session_state[k] = (full, build(report_figures()))
+            except Exception as e:
+                st.session_state.pop(k, None)
+                st.warning(T("export.pdf_unavailable", error=str(e)))
+    cur = st.session_state.get(k)
+    if cur and cur[0] == full:
+        container.download_button(T("export.pdf"), data=cur[1], file_name=file_name,
+                                  mime="application/pdf", type="primary", key=f"{k}_dl")
+    elif cur:
+        container.caption(T("export.pdf_stale"))
+    else:
+        container.caption(T("export.pdf_figures_note"))
+
+
 def show(container, fig, key, estilos=None):
     """Draw ``fig`` with a small "Ajustar" menu above it (bar width, y limits, height of
     this chart only). The page-wide defaults come from ``estilos``."""
@@ -1566,7 +1690,38 @@ def show(container, fig, key, estilos=None):
         c1, c2 = st.columns(2)
         ymin = c1.text_input(T("style.ymin"), "", key=f"adjy0_{key}")
         ymax = c2.text_input(T("style.ymax"), "", key=f"adjy1_{key}")
+        novos = {}
+        if st.checkbox(T("style.edit_texts"), value=False, key=f"adjtxt_{key}"):
+            st.caption(T("style.edit_texts_hint"))
+            atual_t = getattr(fig.layout.title, "text", None) or ""
+            atual_x = getattr(fig.layout.xaxis.title, "text", None) or ""
+            atual_y = getattr(fig.layout.yaxis.title, "text", None) or ""
+            novos["title"] = st.text_input(T("style.chart_title"), "", placeholder=atual_t,
+                                           key=f"adjtit_{key}")
+            if atual_x:
+                novos["x"] = st.text_input(T("style.x_title"), "", placeholder=atual_x,
+                                           key=f"adjxt_{key}")
+            if atual_y:
+                novos["y"] = st.text_input(T("style.y_title"), "", placeholder=atual_y,
+                                           key=f"adjyt_{key}")
+            for i, tr in enumerate(fig.data[:15]):
+                if getattr(tr, "name", None) and tr.showlegend is not False and \
+                        getattr(tr, "type", "") in ("scatter", "bar", "box", "violin", "histogram"):
+                    novos[("trace", i)] = st.text_input(
+                        T("style.legend_name", name=tr.name), "", placeholder=str(tr.name),
+                        key=f"adjln_{key}_{i}")
     fig.update_layout(height=h)
+    for chave_, txt in novos.items():           # empty box keeps the original text
+        if not txt.strip():
+            continue
+        if chave_ == "title":
+            fig.update_layout(title_text=txt)
+        elif chave_ == "x":
+            fig.update_layout(xaxis_title_text=txt)
+        elif chave_ == "y":
+            fig.update_layout(yaxis_title_text=txt)
+        else:
+            fig.data[chave_[1]].name = txt
     if w:                                   # fixed width: same size on screen and in the PNG
         fig.update_layout(width=int(w), autosize=False)
     if bw is not None:
@@ -1581,6 +1736,7 @@ def show(container, fig, key, estilos=None):
     if lo is not None or hi is not None:          # None keeps that end automatic
         fig.update_layout(yaxis_range=[lo, hi], yaxis_autorange=None)
     add_seal(fig)
+    _register_fig(key, fig)
     container.plotly_chart(fig, width=int(w) if w else "stretch", config=PLOT_CONFIG, key=f"fig_{key}")
 
 
@@ -1631,3 +1787,22 @@ def batch_png_button(container, dpi, zip_name="MangueTREE_figuras.zip"):
             f'background:#fff;color:#1F4D3A;font-weight:600;cursor:pointer">{T("export.batch_button")}</button>'
             f'<div id="st" style="font-size:12px;color:#5F726A;margin-top:4px"></div><script>{js}</script></body>')
     container.iframe(html, height=70)          # st.iframe: runs the script, reaches the page
+
+
+
+_LOCATION_CACHE = {}
+
+
+def location_map(st, coords, lang=None):
+    """Plot-location map shown in the app: the very figure the PDF report uses (satellite
+    image with a pin on each plot). Falls back to the plain coordinate plot offline."""
+    from manguetree.reports import maps, theme
+    lang = _lang(lang)
+    key = (lang, tuple(map(tuple, coords[[c for c in ("lat", "lon", "plot") if c in coords.columns]].astype(str).values)))
+    if key not in _LOCATION_CACHE:
+        cmap = theme.plot_color_map(coords["plot"]) if "plot" in coords.columns else None
+        _LOCATION_CACHE.clear()
+        _LOCATION_CACHE[key] = maps.location_png(coords, lang, cmap, dpi=170)
+    png = _LOCATION_CACHE[key]
+    if png:
+        st.image(png, use_container_width=True)

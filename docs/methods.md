@@ -102,6 +102,25 @@ The species table (sources: Tomlinson 2016; Spalding et al. 2010; Polidoro et al
 - **Several plots in the temporal analysis.** Each workbook is one plot. The series can be shown per plot or as the mean ± standard deviation of the plots in each year. Sheets of the same plot and year are averaged, and a species absent from one of them counts as zero there. The difference chart shows $x_B - x_A$ per species and year.
 - **Normalised profile (multiple plots).** Each parameter is divided by its largest value among the plots, so the plot with the largest value is at 1.
 
+## 9. Reference curve of density against mean DBH (Jiménez et al. 1985)
+
+Jiménez, Lugo and Cintrón (1985, Fig. 1) describe normal tree mortality as a negative power function of the mean DBH of the stand. Fitted to 114 stands of the Americas ($r^2 = 0.73$):
+
+$$\ln y = \ln 7496 - 1.4934 \, \ln x$$
+
+with $y$ in trees per 0.1 ha and $x$ the mean DBH in cm (the diameter of the tree of mean basal area, section 2). MangueTREE converts $y$ to stems per hectare ($\times 10$, that is $y = 74\,960 \, x^{-1.4934}$) and draws the curve under the plots (single plot, multiple plots and temporal pages), with density of live stems on the vertical axis. Cavalcanti et al. (2009) use the same comparison for the mangroves of Guanabara Bay: a density well below the expected one means that the space is not being occupied by mangrove species and can point to altered areas, and a wide scatter around the curve can reflect degraded or regenerating forests. The curve is a reference for the comparison and not a test, and it is not applied to the juveniles of the colonization page, which have height and no DBH. There, the page repeats the reference values of Jiménez et al. (1985) in a note (more than 500,000 propagules per hectare falling to about 2,000 stems per hectare with 2.5 cm of mean DBH in less than five years; 40-70 seedlings per m² in *Rhizophora* and 140-330 per m² in *Avicennia*). Their Fig. 2, the stages of stem density over time (colonization, early development, maturity, senescence), is schematic and has no equation, so the app does not draw it.
+
+## 10. Colonization dynamics page
+
+The page reads the data-entry sheet of each NEMA/UERJ colonization workbook (one per plot) and ignores the calculation sheets. The check screen shows what was read before any result.
+
+- **Codes and classes.** Codes are normalised (upper case, no spaces or asterisks). J is a juvenile (counts in density), PL a seedling, PR a propagule, TR an extra trunk, X, Y, N3 and M dead, N1 and N2 uncertain (outside density) and E excluded (outside every calculation). The user can reclassify any code of a workbook on the check screen, for example an unknown code; the new class changes density, height and the export, and lasts for the session.
+- **Density and height.** Density counts the lines with code J per hectare, with or without the juveniles lacking a cohort; heights are in cm, with the sample standard deviation.
+- **Clean export.** One row per individual and collection (long) or one row per individual with a code and a height column per year (wide), with the collection, its date and year, the class, the cohort and a column that marks the collection that counts in each year.
+- **Plot age and log-linear fit.** The year each plot was established comes from Estevam (2019, Fig. 2.2) and can be edited; age is the collection year minus that year, using only ages above zero. It counts the time since the plot was set up, not since colonization began, because the first plots already had individuals of an earlier cohort when they were demarcated. The page fits $\ln(\text{density}) = a + b \, \ln(\text{age})$ by least squares, jointly or per plot, and reports $b$, its standard error, $r^2$ and $n$. The points are repeated measures of the same plots, so these values are descriptive.
+- **Check screen, counts and joins.** The check also lists the codes per year, the records per collection, the species and height alerts (rows with J but no height, or above a limit). The Count by cohort chart counts individuals per year for any classes or codes, joined or kept apart, stacked by cohort, species or item. Plots can be joined freely (up to three groups, counts and areas added) and the joins apply to every tab; the height tab accepts any class. Settings are applied with the Run analysis button of the sidebar, and the texts of every chart can be edited in its Adjust menu.
+- **Schematic of Jiménez et al. (1985).** Their Fig. 2 (colonization, early development, maturity and senescence of stem density) is redrawn as a qualitative schematic next to the observed density curve. The paper gives no equation or values for it, so the drawing has no scale.
+
 ## References
 
 1. Cintrón G, Schaeffer-Novelli Y (1984). Methods for studying mangrove structure. In: Snedaker SC, Snedaker JG (eds) The mangrove ecosystem: research methods. UNESCO, Paris, pp 91-113.
@@ -118,3 +137,6 @@ The species table (sources: Tomlinson 2016; Spalding et al. 2010; Polidoro et al
 12. Schaeffer-Novelli Y, Cintrón-Molero G, Adaime RR, Camargo TM (1990). Variability of mangrove ecosystems along the Brazilian coast. Estuaries 13(2): 204-218.
 13. Ximenes AC, Maeda EE, Arcoverde GFB, Dahdouh-Guebas F (2016). Spatial assessment of the bioclimatic and environmental factors driving mangrove tree species' distribution along the Brazilian coastline. Remote Sensing 8(6):451. https://doi.org/10.3390/rs8060451
 14. Duke NC (2020). A systematic revision of the vulnerable mangrove genus Pelliciera (Tetrameristaceae) in equatorial America. Blumea 65:107-120. https://doi.org/10.3767/blumea.2020.65.02.04
+15. Jiménez JA, Lugo AE, Cintrón G (1985). Tree mortality in mangrove forests. Biotropica 17(3):177-185. https://doi.org/10.2307/2388214
+16. Cavalcanti VF, Soares MLG, Estrada GCD, Chaves FO (2009). Evaluating mangrove conservation through the analysis of forest structure data. Journal of Coastal Research SI 56:390-394.
+17. Estevam MRM (2019). Os manguezais de Guaratiba frente às mudanças climáticas globais: análise da influência da variabilidade climática sobre a dinâmica de comunidades pioneiras. Tese (Doutorado), Programa de Pós-Graduação em Meio Ambiente, Universidade do Estado do Rio de Janeiro, Rio de Janeiro.

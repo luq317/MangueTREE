@@ -16,7 +16,8 @@ from pathlib import Path
 ICON_DIR = Path(__file__).parent / "app" / "assets" / "icons"
 
 NAV_ICONS = {"Home": "inicio", "1_Single_plot": "parcela_unica",
-             "2_Multiple_plots": "multiplas", "3_Temporal": "temporal", "4_About": "sobre"}
+             "2_Multiple_plots": "multiplas", "3_Temporal": "temporal", "4_About": "sobre",
+             "5_Colonizacao": "dinamica"}
 
 
 @lru_cache(maxsize=None)
@@ -41,13 +42,20 @@ def _before(selector, name, size=18):
             f'background:url("{data_uri(name)}") no-repeat center/contain;}}')
 
 
-def css(tab_icons=()):
-    """CSS that places the nav icons and, by position, the icons of the page's tabs."""
+def css(tab_icons=(), subtab_icons=()):
+    """CSS that places the nav icons and, by position, the icons of the page's tabs.
+    ``subtab_icons`` are those of tabs nested inside a tab (they never inherit the icons of
+    the page's own tabs)."""
     nav = '[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]'
     rules = [_before(f'{nav}[href="{"" if k == "Home" else k.split("_", 1)[1]}"]', v)
              for k, v in NAV_ICONS.items()]
     rules += [_before(f'[role="tablist"] [data-testid="stTab"][data-key="{i}"] p', name)
               for i, name in enumerate(tab_icons) if name]
+    if subtab_icons:
+        sub = '[role="tabpanel"] [role="tablist"] [data-testid="stTab"]'
+        rules.append(f'{sub} p::before{{display:none;}}')
+        rules += [_before(f'{sub}[data-key="{i}"] p', name)
+                  for i, name in enumerate(subtab_icons) if name]
     rules.append('[data-testid="stTab"] p{display:flex;align-items:center;}')
     # selector titles (Métrica, Condição, Tipo de gráfico...) stand out from the options
     rules.append('[data-testid="stWidgetLabel"] p{font-weight:600!important;color:#1F4D3A;}'

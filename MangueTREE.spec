@@ -20,7 +20,7 @@ block_cipher = None
 
 # Collect code, data files and hidden imports of the heavy libraries
 _pkgs = ["streamlit", "plotly", "reportlab", "matplotlib", "openpyxl",
-         "unidecode", "PIL", "pandas", "numpy", "altair", "pyarrow", "tornado"]
+         "unidecode", "PIL", "pandas", "numpy", "altair", "pyarrow", "tornado", "kaleido", "choreographer"]
 datas, binaries, hiddenimports = [], [], []
 for _p in _pkgs:
     try:

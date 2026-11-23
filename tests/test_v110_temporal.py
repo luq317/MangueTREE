@@ -88,7 +88,7 @@ def test_palette_recolours_species():
 def test_pdf_data_check_comes_last(monkeypatch):
     from manguetree import report as rep
     seen = {}
-    monkeypatch.setattr(rep, "_gerar", lambda title, sub, blocks, lang, seal: blocks)
+    monkeypatch.setattr(rep, "_gerar", lambda title, sub, blocks, lang, seal, **kw: blocks)
     df, a = mio.load_excel_sheet(str(ROOT / "data" / "guaratiba_F2_with_errors.xlsx"), "F2", "", 100.0)
     blocks = rep.single_plot_report(mc.analyze(df, a, RES), lang="en")
     heads = [b[1] for b in blocks if b[0] == "h"]

@@ -183,7 +183,7 @@ def test_report_verification_section_text():
     from manguetree import report as rep
     txt = _pdf_text(rep.single_plot_report(_f2_result(), lang="pt"))
     assert "Verificação dos dados" in txt
-    assert "Erros: 0 | Avisos: 1" in txt
+    assert "0 erros e 1 avisos" in txt
 
 
 def test_report_escapes_markup_in_issue_text():
@@ -198,7 +198,7 @@ def test_report_escapes_markup_in_issue_text():
     assert "<5" in txt and "V&M" in txt
 
 
-def test_report_errors_survive_truncation():
+def test_report_check_is_grouped_by_category_errors_first():
     from manguetree import charts as ui, report as rep
     from manguetree.validation import Issue
     iss = [Issue("duplicate_tag", "warning", n, n, "w", "") for n in range(150)]
@@ -206,8 +206,11 @@ def test_report_errors_survive_truncation():
     frame = ui.issues_display_frame(iss, lang="pt")
     blocks = rep._bloco_verificacao(frame, "pt")
     tab = next(c for t, c in blocks if t == "tab")
-    assert len(tab) == rep.MAX_LINHAS_VERIFICACAO
-    assert tab.iloc[0]["Gravidade"] == "Erro"
+    assert len(tab) == 2                                   # one row per category, not 151
+    assert tab.iloc[0]["Gravidade"] == "Erro"              # errors first
+    assert int(tab["Ocorrências (N)"].sum()) == 151
+    cap = " ".join(c for t, c in blocks if t == "cap")
+    assert "1 erros" in cap and "150 avisos" in cap and "Problemas" in cap
 
 
 def test_issues_sheet_header_same_in_single_and_multiple():

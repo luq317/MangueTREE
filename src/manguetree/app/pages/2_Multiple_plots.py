@@ -39,7 +39,7 @@ except Exception as e:
 # Results belong to the file they were computed from: a new upload clears them.
 _fid = getattr(uploaded, "file_id", uploaded.name)
 if st.session_state.get("multi_file") != _fid:
-    for _k in ('multi_resultados', 'multi_sig', 'multi_issues', 'multi_ignoradas', 'pdf_multi', 'pdf_sig_multi'):
+    for _k in ('multi_resultados', 'multi_sig', 'multi_issues', 'multi_ignoradas', 'pdf_multi', 'pdf_sig_multi', 'pdfx_multi'):
         st.session_state.pop(_k, None)
     st.session_state["multi_file"] = _fid
 
@@ -155,6 +155,7 @@ tabs = st.tabs([t("multi.tab.compare"), t("multi.tab.species"),
                 t("multi.tab.ivi"), t("multi.tab.map"), t("tab.check"), t("multi.tab.export")])
 
 with tabs[0]:
+    ui.report_section(t("multi.tab.compare"))
     # first the normalised profile, then the free chart (opens on the DBH of each plot)
     met_radar = ["mean_dbh_cm", "height_mean_m", "canopy_height_m", "density_live_ha",
                  "ba_live_ha", "complexity_2_5", "n_species_live"]
@@ -193,8 +194,11 @@ with tabs[0]:
              format_func=lambda b: t(f"multi.share.{b}"))
     _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
     st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
+    st.divider()
+    ui.show_jimenez(st, df_param, estilos, "2_jim", LANG)
 
 with tabs[1]:
+    ui.report_section(t("multi.tab.species"))
     st.subheader(t("multi.species_title"))
     st.caption(t("multi.species_caption"))
     ccol1, ccol2 = st.columns(2)
@@ -245,6 +249,7 @@ with tabs[1]:
                            file_name=t("file.species_by_plot"), mime="text/csv")
 
 with tabs[2]:
+    ui.report_section(t("multi.tab.ivi"))
     st.subheader(t("multi.ivi_title"))
     st.caption(t("method.ivi_multi"))
     # densidade e área basal absolutas: troncos somados / soma das áreas das parcelas
@@ -263,10 +268,10 @@ with tabs[3]:
         if "lat" in d.columns and "lon" in d.columns:
             m = d[["lat", "lon"]].dropna().drop_duplicates()
             if not m.empty:
-                map_rows.append(m.iloc[0].to_dict())
+                map_rows.append({**m.iloc[0].to_dict(), "plot": str(res["plot_name"])})
     st.subheader(t("multi.locations"))
     if map_rows:
-        st.map(pd.DataFrame(map_rows))
+        ui.location_map(st, pd.DataFrame(map_rows), LANG)
     else:
         st.info(t("map.no_coordinates"))
 
@@ -280,25 +285,21 @@ with tabs[5]:
     df_long_esp = ui.dados_especies_parcelas(resultados, "area")
 
     sig = ("multi", tuple(r["plot_name"] for r in resultados), limites, cfg_sig, LANG, show_seal)
-    if st.session_state.get("pdf_sig_multi") != sig:
-        with st.spinner(t("export.preparing_pdf_all")):
-            try:
-                from manguetree import report as rep
-                st.session_state["pdf_multi"] = rep.multiple_plots_report(
-                    resultados, df_param, ivi_all, df_long_esp,
-                    ui.issues_frame_by_unit(problemas, t("labels.sheet"), LANG),
-                    lang=LANG, seal=show_seal)
-                st.session_state["pdf_sig_multi"] = sig
-            except Exception as e:
-                st.session_state["pdf_multi"] = None
-                st.warning(t("export.pdf_unavailable", error=str(e)))
-
+    from manguetree import report as rep
+    _coords = None
+    for res in resultados:
+        d = res["data"]
+        if "lat" in d.columns and "lon" in d.columns:
+            m = d[["lat", "lon"]].dropna().drop_duplicates()
+            if not m.empty:
+                r_ = m.iloc[[0]].assign(plot=str(res["plot_name"]))
+                _coords = r_ if _coords is None else pd.concat([_coords, r_], ignore_index=True)
     cc = st.columns(3)
-    with cc[0]:
-        if st.session_state.get("pdf_multi"):
-            st.download_button(t("export.pdf"), data=st.session_state["pdf_multi"],
-                               file_name=t("file.multi_pdf"),
-                               mime="application/pdf", type="primary")
+    ui.pdf_block(cc[0], "multi", lambda figs: rep.multiple_plots_report(
+        resultados, df_param, ivi_all, df_long_esp,
+        ui.issues_frame_by_unit(problemas, t("labels.sheet"), LANG),
+        lang=LANG, seal=show_seal, figures=figs, coords=_coords),
+        t("file.multi_pdf"), sig)
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xls:
         ui.for_display(df_param, lang=LANG).to_excel(

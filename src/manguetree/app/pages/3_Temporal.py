@@ -32,6 +32,14 @@ def _extrai_ano(nome):
     return int(m.group(0)) if m else None
 
 
+_RESUMO = re.compile(r"^(resum|domin|[aá]rea basal|densidade|alt e dap|obs|inds? isolados|[<>])", re.I)
+
+
+def _e_resumo(nome):
+    """Summary and calculation sheets of the lab workbooks (they start off in the list)."""
+    return bool(_RESUMO.match(str(nome).strip())) and _extrai_ano(nome) is None
+
+
 def _plot_name(file_name):
     return file_name.rsplit(".", 1)[0]
 
@@ -60,7 +68,7 @@ MULTI = len(uploads) > 1
 _fid = tuple(sorted(getattr(u, "file_id", u.name) for u in uploads))
 if st.session_state.get("temp_file") != _fid:
     for _k in ("temp_serie", "temp_esp", "temp_sig", "temp_issues",
-               "temp_ignoradas", "pdf_temp", "pdf_sig_temp"):
+               "temp_ignoradas", "pdf_temp", "pdf_sig_temp", "pdfx_temp"):
         st.session_state.pop(_k, None)
     st.session_state["temp_file"] = _fid
 
@@ -79,7 +87,7 @@ for nome, abas in abas_por_arquivo.items():
     up = arquivos[nome]
     selecionadas[nome] = st.sidebar.multiselect(
         t("temporal.surveys_to_include") + (f" · {_plot_name(nome)}" if MULTI else ""),
-        options=abas, default=abas, key=f"sheets_temp_{up.name}_{up.size}")
+        options=abas, default=([a for a in abas if not _e_resumo(a)] or abas), key=f"sheets_temp_{up.name}_{up.size}")
 
 # --- Ano de cada aba: detectado no nome; pede só o que falta, o resto fica num expansor ---
 anos_por_aba = {}
@@ -230,6 +238,7 @@ tabs = st.tabs([t("temporal.tab.evolution"), t("temporal.tab.species"),
                 t("temporal.tab.export")])
 
 with tabs[0]:
+    ui.report_section(t("temporal.tab.evolution"))
     st.subheader(t("temporal.evolution"))
     cm, cg = st.columns([2, 1])
     with cm:
@@ -267,8 +276,12 @@ with tabs[0]:
             ui.show(st, ui.fig_temporal_multi(base, estilos, esq, dire, LANG), "3_2", estilos)
         else:
             st.info(t("temporal.pick_each_axis"))
+    st.divider()
+    _jim = df_serie.assign(label=df_serie["year"].astype(int).astype(str))
+    ui.show_jimenez(st, _jim, estilos, "3_jim", LANG, text="label", group="plot")
 
 with tabs[1]:
+    ui.report_section(t("temporal.tab.species"))
     st.subheader(t("temporal.by_species"))
     if df_esp is None or df_esp.empty:
         st.info(t("temporal.no_species_data"))
@@ -351,6 +364,7 @@ with tabs[1]:
                            file_name=t("file.series_by_species"), mime="text/csv")
 
 with tabs[2]:
+    ui.report_section(t("temporal.tab.mortality"))
     st.subheader(t("temporal.mortality"))
     GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_mort")
     ca, cb = st.columns(2)
@@ -395,22 +409,11 @@ with tabs[5]:
                    [["year", "species", "density_ha", "ba_ha", "mean_dbh_cm", "height_mean_m",
                      "ba_contribution_pct"]])
     sig = ("temp", tuple(PLOTS), tuple(df_serie["year"].tolist()), cfg_sig, LANG, show_seal)
-    if st.session_state.get("pdf_sig_temp") != sig:
-        with st.spinner(t("export.preparing_pdf_all")):
-            try:
-                from manguetree import report as rep
-                st.session_state["pdf_temp"] = rep.temporal_report(
-                    pdf_serie, pdf_esp, df_problemas, lang=LANG, seal=show_seal)
-                st.session_state["pdf_sig_temp"] = sig
-            except Exception as e:
-                st.session_state["pdf_temp"] = None
-                st.warning(t("export.pdf_unavailable", error=str(e)))
+    from manguetree import report as rep
     cc = st.columns(3)
-    with cc[0]:
-        if st.session_state.get("pdf_temp"):
-            st.download_button(t("export.pdf"), data=st.session_state["pdf_temp"],
-                               file_name=t("file.temporal_pdf"), mime="application/pdf",
-                               type="primary")
+    ui.pdf_block(cc[0], "temp", lambda figs: rep.temporal_report(
+        pdf_serie, pdf_esp, df_problemas, lang=LANG, seal=show_seal, figures=figs),
+        t("file.temporal_pdf"), sig)
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xls:
         ui.for_display(df_serie, lang=LANG).to_excel(

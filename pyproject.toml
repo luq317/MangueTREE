@@ -20,6 +20,7 @@ dependencies = [
     "matplotlib",
     "reportlab",
     "pillow",
+    "kaleido",     # optional in practice: PDF charts identical to the app (needs Chrome/Chromium)
 ]
 
 [project.optional-dependencies]
@@ -32,7 +33,7 @@ manguetree = "manguetree.launcher:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-manguetree = ["data/*", "app/*.py", "app/pages/*.py", "app/assets/*", "app/assets/icons/*", "app/.streamlit/*", "locales/*.json"]
+manguetree = ["data/*", "data/fonts/*", "app/*.py", "app/pages/*.py", "app/assets/*", "app/assets/icons/*", "app/.streamlit/*", "locales/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

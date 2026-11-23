@@ -154,6 +154,24 @@ def _ft(plot_area_m2):
 # ---------------------------------------------------------------------------
 # 3. AGGREGATE STRUCTURAL PARAMETERS
 # ---------------------------------------------------------------------------
+# Jimenez, Lugo & Cintron (1985, Biotropica 17(3):177-185, Fig. 1): stem density of mangrove
+# stands falls as a negative power of the mean DBH, ln(y) = ln(7496) - 1.4934 ln(x), with y in
+# trees per 0.1 ha and x in cm (114 stands, r2 = 0.73). Cavalcanti et al. (2009) use it per hectare.
+JIMENEZ_LN_A = float(np.log(7496.0))
+JIMENEZ_B = 1.4934
+JIMENEZ_TO_HA = 10.0              # 0.1 ha -> 1 ha
+
+
+def jimenez_density_ha(dbh_cm):
+    """Expected live stem density (stems/ha) of a mangrove stand of mean DBH ``dbh_cm`` (cm),
+    from the theoretical curve of Jimenez et al. (1985). Accepts a number or an array."""
+    x = np.asarray(dbh_cm, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        y = JIMENEZ_TO_HA * np.exp(JIMENEZ_LN_A - JIMENEZ_B * np.log(x))
+    y = np.where(x > 0, y, np.nan)
+    return float(y) if y.ndim == 0 else y
+
+
 def quadratic_mean_dbh(ba_ha, density_ha):
     """
     Diameter of the stem of mean basal area (Cintrón 1984, p.93-94):

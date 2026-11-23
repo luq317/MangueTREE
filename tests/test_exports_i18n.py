@@ -56,12 +56,11 @@ def test_pdf_english_has_no_portuguese(pdf_en, tmp_path):
 
 def test_pdf_footer_citation(pdf_en, pdf_pt, tmp_path):
     en = _text(pdf_en, tmp_path)
-    assert "Generated with MangueTREE v1.1.0" in en
+    assert "MangueTREE v1.1.0" in en and "Pereira LS et al. (2026)" in en
     assert "github.com/luq317/MangueTREE" in en
-    assert "How to cite" in en
     assert "linkedin" not in en.lower() and "@" not in en
     pt = _text(pdf_pt, tmp_path)
-    assert "Gerado com o MangueTREE v1.1.0" in pt and "Como citar" in pt
+    assert "Pereira LS et al. (2026)" in pt and "Referências" in pt
     assert "@" not in pt
 
 
@@ -105,11 +104,11 @@ def test_multiple_and_temporal_reports_are_bilingual(f2, tmp_path):
     df_param = pd.DataFrame([{"plot": "F2", "density_live_ha": 1.0, "ba_live_ha": 2.0}])
     pdf = report.multiple_plots_report(res, df_param, f2["importance"], None, lang="en")
     txt = _text(pdf, tmp_path)
-    assert "Multiple-plot analysis" in txt and "Generated with MangueTREE" in txt
+    assert "Multiple-plot analysis" in txt and "Pereira LS et al. (2026)" in txt
     serie = pd.DataFrame({"year": [2009, 2010], "density_live_ha": [1.0, 2.0]})
     pdf = report.temporal_report(serie, None, lang="pt")
     txt = _text(pdf, tmp_path)
-    assert "Análise temporal de parcela" in txt and "Período 2009 a 2010" in txt
+    assert "Análise temporal de parcela" in txt and "2009 a 2010" in txt
 
 
 def _t2_multi(lang):
@@ -147,7 +146,7 @@ def test_comparison_table_never_splits_words(lang, tmp_path):
     assert lay["fits"] and abs(sum(lay["widths"]) - width) < 1
     for head, w in zip(lay["header"], lay["widths"]):
         for word in head.split():
-            assert stringWidth(word, "DejaVuSans-Bold", lay["hdr_size"]) <= w - 2 * report._PAD
+            assert stringWidth(word, report._FONT_BOLD, lay["hdr_size"]) <= w - 2 * report._PAD
     pdf = report.multiple_plots_report(results, df_param, ivi, None, lang=lang)
     txt = _text(pdf, tmp_path)
     assert "Holdridge" in txt
@@ -185,12 +184,11 @@ def test_stem_count_mismatch_plural():
     assert describe(mk("1", 1), "pt") == "declarado 1 tronco, 1 linha"
 
 
-def test_wide_table_switches_to_landscape(tmp_path):
+def test_wide_table_stays_portrait_and_shrinks(tmp_path):
     if shutil.which("pdfinfo") is None:
         pytest.skip("pdfinfo not available")
     wide = pd.DataFrame({f"Extraordinarily{j}": [1.0] for j in range(11)})
-    assert not report.table_layout(wide, "en", report._LARGURA_UTIL)["fits"]
     pdf = report._gerar("t", "", [("tab", wide)], "en", False)
     p = tmp_path / "w.pdf"; p.write_bytes(pdf)
     out = subprocess.run(["pdfinfo", str(p)], capture_output=True, text=True).stdout
-    assert "841.89 x 595.276" in out
+    assert "595.276 x 841.89" in out                  # reports are always A4 portrait

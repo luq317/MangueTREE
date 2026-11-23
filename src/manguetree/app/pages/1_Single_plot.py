@@ -141,6 +141,7 @@ with tab_panel:
     st.iframe('<body style="margin:0">' + dash.panel_html(res, tema, LANG, cores_p, sub_p) + "</body>",
               height=730)      # keeps the SVG figures and the hover values
     d1, d2 = st.columns(2)
+    PANEL_PNG = dash.summary_panel(res, tema, LANG, cores_p, "png", min(dpi_p, 200), sub_p)   # also goes in the PDF
     d1.download_button(t("dashboard.png"), dash.summary_panel(res, tema, LANG, cores_p, "png", dpi_p, sub_p),
                        file_name=f"MangueTREE_painel_{plot_name}.png", mime="image/png", type="primary")
     d2.download_button(t("dashboard.pdf"), dash.summary_panel(res, tema, LANG, cores_p, "pdf", 300, sub_p),
@@ -148,6 +149,7 @@ with tab_panel:
 
 # --- TAB 1: ESTRUTURA ---
 with tabs[0]:
+    ui.report_section(t("single.tab.structure"))
     L = lambda k: ui.label(k, LANG)
     st.subheader(t("single.structural"))
     # order asked by the lab: DBH, mean height, canopy, live density, live basal area;
@@ -173,6 +175,10 @@ with tabs[0]:
             col.metric(lab, val, border=True)
     st.caption(t("method.heights_live_only"))
     st.caption(t("method.mean_dbh"))
+
+    st.divider()
+    ui.show_jimenez(st, pd.DataFrame({"plot": [plot_name], "mean_dbh_cm": [r["mean_dbh_cm"]],
+                                      "density_live_ha": [r["density_live_ha"]]}), estilos, "1_jim", LANG)
 
     st.divider()
     st.subheader(t("single.by_genus"))
@@ -219,6 +225,7 @@ with tabs[0]:
 
 # --- TAB 2: FITOSSOCIOLOGIA ---
 with tabs[1]:
+    ui.report_section(t("single.tab.phyto"))
     st.subheader(t("single.phyto_table"))
     ivi = res["importance"]
     if ivi is not None and not ivi.empty:
@@ -241,6 +248,7 @@ with tabs[1]:
 
 # --- TAB 3: CLASSES DE DAP ---
 with tabs[2]:
+    ui.report_section(t("single.tab.classes"))
     st.subheader(t("single.dbh_distribution"))
     st.caption(t("method.dbh_classes"))
     metrica = st.radio(t("single.metric"), ("density", "basal_area"), horizontal=True, key="metrica_unica",
@@ -291,6 +299,7 @@ with tabs[2]:
 
 # --- TAB 4: ALTURA & PERFIL ---
 with tabs[3]:
+    ui.report_section(t("single.tab.height"))
     st.subheader(t("single.height_dbh"))
     esp_disp = [s_ for s_ in res["data"].loc[res["data"]["live"], "species_label"].dropna().unique()]
     esp_sel = st.multiselect(t("single.regression_species"), esp_disp, default=esp_disp,
@@ -326,7 +335,7 @@ with tabs[4]:
     st.subheader(t("single.location"))
     mp = d0[["lat", "lon"]].dropna() if {"lat", "lon"} <= set(d0.columns) else None
     if mp is not None and not mp.empty:
-        st.map(mp)
+        ui.location_map(st, mp.assign(plot=str(res["plot_name"])), LANG)
     else:
         st.info(t("map.no_coordinates"))
 
@@ -338,25 +347,17 @@ with tabs[5]:
 with tabs[6]:
     st.subheader(t("single.export"))
     nome = res["plot_name"]
-    # Relatório PDF gerado uma vez por configuração (download em 1 clique)
+    # PDF report: prepared on click, with the charts as they are on screen
     sig = ("unica", getattr(uploaded, "file_id", uploaded.name), sheet, nome,
            round(area_final, 2), limites, largura_classe,
            ui.settings_signature(), cond_faltante, LANG, show_seal)
-    if st.session_state.get("pdf_sig_unica") != sig:
-        with st.spinner(t("export.preparing_pdf")):
-            try:
-                from manguetree import report as rep
-                st.session_state["pdf_unica"] = rep.single_plot_report(res, lang=LANG, seal=show_seal)
-                st.session_state["pdf_sig_unica"] = sig
-            except Exception as e:
-                st.session_state["pdf_unica"] = None
-                st.warning(t("export.pdf_unavailable", error=str(e)))
+    from manguetree import report as rep
+    _coords = mp.drop_duplicates().assign(plot=nome) if mp is not None and not mp.empty else None
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.session_state.get("pdf_unica"):
-            st.download_button(t("export.pdf"), data=st.session_state["pdf_unica"],
-                               file_name=f"MangueTREE_{nome}.pdf", mime="application/pdf",
-                               type="primary")
+        ui.pdf_block(st, "unica", lambda figs: rep.single_plot_report(
+            res, lang=LANG, seal=show_seal, figures=figs, panel_png=PANEL_PNG, coords=_coords),
+            f"MangueTREE_{nome}.pdf", sig)
     with c2:
         st.download_button(t("export.excel"), data=ui.to_excel_bytes(res, LANG),
                            file_name=f"MangueTREE_{nome}.xlsx",

@@ -16,3 +16,12 @@ def _english_ui_in_tests(request, monkeypatch):
     against the English labels, so they run with English unless marked ``pt_default``."""
     if "pt_default" not in request.keywords:
         monkeypatch.setattr(i18n, "UI_DEFAULT", "en")
+
+
+import pytest as _pytest
+
+
+@_pytest.fixture(autouse=True)
+def _colonizacao_on(monkeypatch):
+    """The colonization page is a preview (hidden unless switched on); tests use it switched on."""
+    monkeypatch.setenv("MANGUETREE_COLONIZACAO", "1")

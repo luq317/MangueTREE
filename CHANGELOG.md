@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- PDF report redesigned as a scientific article (single plot, multiple plots, temporal): cover with logo on a transparent background, key numbers and summary text, numbered headings, numbered figure and table captions, summary panel, panels of charts with letters (a, b, c) and spacing, map of the plots when latitude and longitude exist, and the data check at the end. The text uses the full page width and flows from the first page to the next.
+- PDF report uses the app's own charts as they are on screen (same options, texts and colours) grouped by tab, when Chrome or Chromium is installed (kaleido); otherwise the charts are redrawn automatically. The PDF is now prepared on demand with a Prepare PDF button and flagged as out of date when the charts or settings change.
+- Colonization dynamics page: reads the NEMA colonization workbooks (one per plot), identifies the collections and the year of each, standardises the codes and shows a check (collections and years with manual correction, codes and their classes, juveniles by cohort, repeated tags, ignored notes) before any result. Then it computes the density of juveniles (ind/ha), with only the individuals with a cohort or including those without, by species, with plots A and B joined (counts and areas added) and a CSV download.
+- Colonization page: juvenile height (mean, sample SD, n, optional minimum of 100 cm), relative density by species and a Charts tab (density curve per plot with log option, species composition per plot, height mean with SD), using the app palettes and style controls.
+- Colonization page: clean export (long and wide, CSV and Excel), reclassification of codes by the user, plot age with a log-linear fit of density against age, and a schematic of stem density over stand development (Jiménez et al. 1985, Fig. 2) next to the observed density.
+- Theoretical curve of Jiménez, Lugo and Cintrón (1985) for live stem density against mean DBH, drawn under the plots of the single plot, multiple plots and temporal pages (`calc.jimenez_density_ha`, `charts.fig_jimenez`); reference values of the same paper in the colonization charts; Jiménez et al. (1985) and Cavalcanti et al. (2009) added to the references (docs/methods.md, About page).
+- Colonization page, second round: more on the check screen (codes per year, records per collection, species, height alerts); count of individuals per year by class or by code, joining selections and stacked by cohort, species or item (new Count by cohort chart); height by any class, not only juveniles; free joining of plots (up to three groups) applied to every tab; charts grouped in sub-tabs (density, age, height, count, Jiménez schematic); sidebar form with a Run analysis button; Excel prepared on demand.
+- Every chart of the app can have its texts edited (title, axis titles, labels) in the Adjust menu.
+- Module `manguetree.colonizacao` (reader and density) and tests, including a validation against the published density table of the monograph (98 of 100 values equal; the 2 others are a typing error of the table).
+- PDF reports rebuilt in one visual identity for the four modes (single plot, multiple plots, temporal, colonization): always A4 portrait, cover with key numbers and a reading of the results, tables with proportional bars, grouped data check, numbered pages ("Page X of Y"), bundled Liberation Sans font (SIL OFL), decimal comma in Portuguese on tables and chart axes, and a fixed species palette (same colour for a species in every chart). In multiple-plot reports each plot keeps one colour across all charts.
+- Plot-location map (app and PDF report): the same figure, with satellite imagery (Esri World Imagery, downloaded when the map is drawn; the plain coordinate plot is used offline) and a small pin on each plot.
+- Box and violin plots have a thin outline in the axis colour, in the app and in the PDF report.
+- The colonization page is a preview: hidden in the menu and blocked unless the environment variable `MANGUETREE_COLONIZACAO=1` (or the app secret `colonizacao = true`) is set.
+
 ## [1.1.0] - 2026-11-18
 
 Large update made with the NEMA/UERJ laboratory. Laiza Lacerda Motta joins the authors.

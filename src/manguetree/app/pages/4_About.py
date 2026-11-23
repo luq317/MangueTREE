@@ -17,7 +17,7 @@ st.write(t("about.what"))
 st.markdown(t("about.features"))
 
 st.header(t("about.method_title"))
-st.markdown(t("about.method"))
+st.markdown(t("about.method") + "\n" + t("about.method_extra"))
 
 st.header(t("about.authors_title"))
 st.markdown("\n".join(f"- {a}" for a in ("Lucas Silva Pereira", "Laiza Lacerda Motta", "Tatiane Costa da Matta",

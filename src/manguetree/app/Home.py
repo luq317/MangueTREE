@@ -31,7 +31,7 @@ with left:
     st.markdown(t("home.computes"))
 with right:
     st.subheader(t("home.basis_title"))
-    st.markdown(t("about.method"))
+    st.markdown(t("about.method") + "\n" + t("about.method_extra"))
     st.caption(t("home.more_about"))
 
 with st.expander(t("home.format_title")):
