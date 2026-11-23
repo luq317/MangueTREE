@@ -1,7 +1,7 @@
 {
   "title": "MangueTREE: structural and phytosociological analysis of mangrove forest plots",
   "upload_type": "software",
-  "license": "MIT",
+  "license": "gpl-3.0-or-later",
   "description": "Python engine and Streamlit app that computes forest structure, phytosociology (relative values and importance value), DBH classes and the Holdridge complexity index from stem-level field data of mangrove plots.",
   "creators": [
     {

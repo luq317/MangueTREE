@@ -41,13 +41,20 @@ def test_no_private_lab_files():
             assert bad not in rel, rel
 
 
-def test_license_is_mit_with_authors():
+def test_license_is_gpl3_with_authors():
     text = (ROOT / "LICENSE.txt").read_text(encoding="utf-8")
-    assert "MIT License" in text
+    assert "GNU GENERAL PUBLIC LICENSE" in text
+    assert "Version 3, 29 June 2007" in text
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert ("Copyright (c) 2026 Lucas Silva Pereira, Laiza Lacerda Motta, "
-            "Tatiane Costa da Matta, "
-            "Filipe de Oliveira Chaves, "
-            "Mário Luiz Gomes Soares") in text
+            "Tatiane Costa da Matta, Filipe de Oliveira Chaves, "
+            "Mário Luiz Gomes Soares") in readme
+    assert 'license = "GPL-3.0-or-later"' in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_source_files_carry_license_notice():
+    for path in (ROOT / "src" / "manguetree").rglob("*.py"):
+        assert "GNU General Public License" in path.read_text(encoding="utf-8")[:900], path
 
 
 def test_branding_has_no_linkedin_or_title():

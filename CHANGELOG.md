@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- License changed from MIT to GPL-3.0-or-later (agreed by all authors). Versions up to 1.1.0 remain available under the MIT license. License notice added to the source files and to the About page.
+
 ### Added
 
 - PDF report redesigned as a scientific article (single plot, multiple plots, temporal): cover with logo on a transparent background, key numbers and summary text, numbered headings, numbered figure and table captions, summary panel, panels of charts with letters (a, b, c) and spacing, map of the plots when latitude and longitude exist, and the data check at the end. The text uses the full page width and flows from the first page to the next.

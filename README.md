@@ -3,7 +3,7 @@
 [![Tests](https://github.com/luq317/MangueTREE/actions/workflows/tests.yml/badge.svg)](https://github.com/luq317/MangueTREE/actions/workflows/tests.yml)
 [![Docs](https://img.shields.io/badge/docs-luq317.github.io%2FMangueTREE-2e7d6b)](https://luq317.github.io/MangueTREE/)
 [![Release](https://img.shields.io/github/v/release/luq317/MangueTREE)](https://github.com/luq317/MangueTREE/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE.txt)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
 MangueTREE is a Python engine and a Streamlit app for the structural and phytosociological analysis of mangrove forest plots. It reads field spreadsheets (one row per stem) and computes density, basal area, mean DBH, tree height, mortality, relative density, dominance and frequency, the importance value (IVI), DBH classes and the Holdridge complexity index. It is meant for researchers and managers who survey mangrove plots with the stem-based protocol of Cintrón & Schaeffer-Novelli (1984).
@@ -131,7 +131,9 @@ A companion article describing the software is in preparation. GitHub also reads
 
 ## License
 
-MIT. See [LICENSE.txt](LICENSE.txt).
+Copyright (c) 2026 Lucas Silva Pereira, Laiza Lacerda Motta, Tatiane Costa da Matta, Filipe de Oliveira Chaves, Mário Luiz Gomes Soares.
+
+MangueTREE is free software: you can redistribute it and modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but without any warranty. The full text is in [LICENSE.txt](LICENSE.txt). Versions up to 1.1.0 were released under the MIT license.
 
 ## Contributing
 
