@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-24
+
+### Changed (home and colonization layout)
+
+- Home page: the data template (download buttons) comes before "Choose an analysis", with "How to format your data" inside the same box.
+- Colonization page: the Charts tab comes first and holds the sub-tabs Density, Height, Age, Crossing, Count by cohort and Jiménez schematic; the density and height tables now sit under their charts; then Check and Export. Each chart has its choices in one row with the Adjust and Chart table buttons, as in the structure pages.
+- Colonization, Age: both axes with the same size (square plot), age from 0 to 10 years, density with complete numbers (10.000), linear or log; chart types points, points with SD, line, columns, columns with SD and horizontal bars; optional fitted curve with its equation.
+- Colonization, Crossing: "X vs Y" renamed scatter plot, with the least-squares line and, below it, the equation, Pearson r, p, R² and n, which follow the X axis chosen.
+- Colonization, Count by cohort: colours can be default (as before), a ready-made palette, a gradient of one colour or each colour picked.
+- Colonization, Jiménez schematic: explanatory texts under the charts removed (the figure of the article has no equation).
+- Colonization, Height: same chart types as the Age tab (line, points, columns, horizontal bars, and the versions with standard deviation; default line with SD).
+- Colonization, Age: types without standard deviation (one value per plot and age); the fitted curve switch, the fit and the equations moved to the right of the chart.
+- Colonization, Jiménez schematic: both charts share the same margins, so their axes start and end at the same heights.
+- Colonization, Height: standard deviation drawn upwards only, columns start at the axis without an empty band, chart title is just "Height".
+- Colonization, Density: same chart types as Height (line, points, columns, horizontal bars).
+- Colonization, Age: legend inside the chart (upper left), points at the edge no longer cut.
+- Colonization, joined plots: the legend of the joined years goes in one row below the chart, so it no longer squeezes the plotting area.
+- Colonization, Jiménez schematic: no Adjust and Table buttons on the two charts.
+
+### Changed (latest round)
+
+- Species always appear in the same fixed order in every chart, legend, table and menu of the app (Rhizophora, Avicennia, Laguncularia, Conocarpus, then others, unidentified last), and keep the same colours across charts.
+- Temporal page, Evolution and Mortality tabs: one row above the charts holds the chart type, gaps, a single "Adjust charts" menu (axis limits of each chart separately, plus size and bar width) and a single "Chart tables" menu to download the tables of the charts below, replacing the per-chart buttons.
+- Notes under the temporal charts (points are plot values per year; stems without DBH are left out of density and basal area) now sit after the charts with spacing so they never overlap a figure.
+
 ### Changed
 
 - License changed from MIT to GPL-3.0-or-later (agreed by all authors). Versions up to 1.1.0 remain available under the MIT license. License notice added to the source files and to the About page.
@@ -22,6 +47,20 @@ All notable changes to this project are documented here. The format follows [Kee
 - PDF reports rebuilt in one visual identity for the four modes (single plot, multiple plots, temporal, colonization): always A4 portrait, cover with key numbers and a reading of the results, tables with proportional bars, grouped data check, numbered pages ("Page X of Y"), bundled Liberation Sans font (SIL OFL), decimal comma in Portuguese on tables and chart axes, and a fixed species palette (same colour for a species in every chart). In multiple-plot reports each plot keeps one colour across all charts.
 - Plot-location map (app and PDF report): the same figure, with satellite imagery (Esri World Imagery, downloaded when the map is drawn; the plain coordinate plot is used offline) and a small pin on each plot.
 - Box and violin plots have a thin outline in the axis colour, in the app and in the PDF report.
+- Colonization page, joined plots: a year in which one plot of a union was not sampled (for example H+I in 2016-2018) is marked as incomplete, with an asterisk and an open diamond in the charts, a warning under tables and charts, and the columns `membros`, `n_parcelas` and `incompleta` in the tables; an option hides those years. The calculation (sum of juveniles over the sum of the areas, not the mean of the densities) is documented in `docs/methods.md`.
+- Heights in metres or centimetres (sidebar choice) on every page: tables, charts, exports, summary panel and PDF report (`manguetree.unidades`).
+- Results in tables, labels and exports with two decimals (0,00 / 0.00); axes keep the complete numbers.
+- Table of every chart (Excel, CSV or TXT), next to the save-as-picture button, and the three formats in every export (`manguetree.exportar`): organised Excel, CSV for Excel (semicolon and decimal comma in Portuguese; UTF-8 with BOM) and tab-separated TXT. The data template also comes as TXT.
+- Colonization: in years with more than one collection the Height tab shows mean, SD and N of each collection and uses by default the one with most heights (or the last, or one chosen per plot and year).
+- Colonization: Crossing tab (Charts) with juvenile height against density, as lines over the years or X vs Y, with the Pearson correlation per plot.
+- Cleaner layout: Adjust and Chart table are two small buttons in one row above each chart; chart type and parameters of multiple plots, species by plot and temporal species are collapsing menus in one row; export columns aligned, with bold titles and no icons; explanation under the charts that use formulas (IVI, comparative profile, species by plot, time series).
+- Citations: the NEMA/UERJ thesis of Estrada (2013) is replaced by Estrada et al. (2013, Aquatic Botany 111:135-143) in the app, reports and documentation.
+- The Jiménez curve note no longer interprets densities below the curve; the comparative profile is named and explained as a radar chart with normalised values.
+- Structure always in stems per hectare (the stems-per-plot selector is gone; the live-density card shows the number of stems in the plot under its value).
+- Each chart's own choices (type, metric, 100%, profile kind, species, log scale) sit in one row with Adjust and Chart table; in the temporal evolution and mortality charts the two buttons are icons in the chart's corner, next to the camera and zoom icons.
+- Temporal evolution: more chart types (line, points, columns, horizontal bars, and line, points or columns with standard deviation for mean height).
+- Explanations under the charts of the single-plot page (height-DBH, vertical profile, DBH classes, histogram, composition) and the radar chart equation.
+- Wording: the field protocol is cited as the protocol of the Mangrove Study Group of UERJ (NEMA/UERJ), not as a spreadsheet.
 - The colonization page is a preview: hidden in the menu and blocked unless the environment variable `MANGUETREE_COLONIZACAO=1` (or the app secret `colonizacao = true`) is set.
 
 ## [1.1.0] - 2026-11-18

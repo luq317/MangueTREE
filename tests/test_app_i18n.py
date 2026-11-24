@@ -203,7 +203,7 @@ def test_portuguese_headers_same_numbers_in_english(tmp_path):
         assert not at.exception
         got[lang] = {m.label: m.value for m in at.metric}[
             i18n.t("labels.density_live_ha", lang)]
-    assert got["en"] == got["pt"] == "300"
+    assert (got["en"], got["pt"]) == ("300.00", "300,00")        # two decimals, mark of the language
 
 
 def test_no_em_dash_in_user_facing_code_strings():

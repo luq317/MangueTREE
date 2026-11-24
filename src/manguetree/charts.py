@@ -28,7 +28,10 @@ import plotly.graph_objects as go
 import plotly.colors as pcolors
 
 from manguetree import calc as mc
+from manguetree import exportar as _exp
 from manguetree import i18n
+from manguetree import unidades as _un
+from manguetree.unidades import altura_unidade, na_unidade  # noqa: F401  (pages use ui.na_unidade)
 from manguetree import branding as marca
 from manguetree.species import (REGIONS, SpeciesResolver, load_genus_defaults,
                                 load_species_table)
@@ -133,13 +136,13 @@ def _layout(fig, estilos, titulo=None):
                 tickfont=dict(size=10), title_font=dict(size=tam_e),
                 exponentformat="none", separatethousands=True)     # 10.000, never 10k
     fig.update_xaxes(showgrid=False, **eixo)
-    fig.update_yaxes(showgrid=False, **eixo)
+    fig.update_yaxes(showgrid=False, hoverformat=",.2f", **eixo)     # hover: two decimals
     from manguetree.reports.plotly_adapter import outline_boxes
     outline_boxes(fig, "#5F726A", 0.8)          # box / violin: thin outline like the axes
     # the seal (opt-in, sidebar checkbox) is placed by add_seal once the final size and
     # margins are known, in the lower right corner outside the plotting area
     fig.update_layout(meta={"mt_seal": bool(estilos.get("seal"))})
-    return fig
+    return _ordena_tracos(fig)
 
 
 def add_seal(fig):
@@ -187,7 +190,7 @@ def species_colors(especies):
     if nome not in PALETAS or nome == "manguetree":
         return {e: mc.species_color(e) for e in especies}
     cores = PALETAS[nome]
-    ordem = sorted(especies, key=lambda s: (s == mc.UNIDENTIFIED_LABEL, str(s)))
+    ordem = ordem_especies(especies)
     return {sp: cores[i % len(cores)] for i, sp in enumerate(ordem)}
 
 
@@ -216,7 +219,10 @@ def label(col, lang=None, data_table=False):
             return f"{label(base, lang)} [{cls[:-1]} cm]"
     if not str(col).isidentifier():      # already a display name (e.g. species contribution)
         return str(col)
-    return i18n.t(f"labels.{col}", _lang(lang))
+    txt = i18n.t(f"labels.{col}", _lang(lang))
+    if col in _un.HEIGHT_COLS and _un.altura_unidade() == "cm":
+        txt = txt.replace("(m)", "(cm)")              # heights shown in centimetres
+    return txt
 
 
 def species_name(name, lang=None):
@@ -225,6 +231,44 @@ def species_name(name, lang=None):
     if name == mc.UNIDENTIFIED_LABEL:
         return i18n.t("species.unidentified", _lang(lang))
     return name
+
+
+#: fixed order of the species in every chart and list: Rhizophora, Avicennia, Laguncularia,
+#: Conocarpus, then the other taxa alphabetically, and the unidentified last
+ESPECIES_ORDEM = ("rhizophora", "avicennia", "laguncularia", "conocarpus")
+
+
+def chave_especie(nome):
+    """Sort key of a species name (internal label or display name): genus position in
+    ``ESPECIES_ORDEM``, other genera after them, unidentified at the very end."""
+    n = str(nome).strip()
+    baixo = n.lower()
+    if n == mc.UNIDENTIFIED_LABEL or baixo in ("não identificada", "nao identificada", "unidentified"):
+        return (900, baixo)
+    for i, g in enumerate(ESPECIES_ORDEM):
+        if g in baixo:
+            return (i, baixo)
+    return (100, baixo)
+
+
+def ordem_especies(especies):
+    """The species of ``especies`` (each once) in the fixed order of ``chave_especie``."""
+    return sorted(dict.fromkeys(especies), key=chave_especie)
+
+
+def _ordena_tracos(fig):
+    """Traces named after species (and nothing else) go in the fixed species order, so the
+    legend and the stacks follow it in every chart."""
+    nomes = [str(getattr(tr, "name", "") or "") for tr in fig.data]
+    if len(nomes) < 2 or any(" · " in n for n in nomes):
+        return fig
+    chaves = [chave_especie(n) for n in nomes]
+    if not any(k[0] < 100 for k in chaves):       # no known genus: not a species chart
+        return fig
+    idx = sorted(range(len(nomes)), key=lambda i: (chaves[i], i))
+    if idx != list(range(len(nomes))):
+        fig.data = tuple(fig.data[i] for i in idx)
+    return fig
 
 
 def condition_label(cond, lang=None):
@@ -348,6 +392,9 @@ def fig_composicao_ba(res, estilos, tipo="pie", lang=None):
                * mc._ft(res["summary"]["plot_area_m2"]))
     comp = comp[comp > 0.001].reset_index()
     comp.columns = [comp_col, ba_col]
+    comp = comp.iloc[sorted(range(len(comp)), key=lambda i: (chave_especie(comp[comp_col].iloc[i]),
+                                                               comp[comp_col].iloc[i]))] \
+        .reset_index(drop=True)
     if comp.empty:
         return None
     if tipo == "treemap":
@@ -357,7 +404,7 @@ def fig_composicao_ba(res, estilos, tipo="pie", lang=None):
     else:
         fig = px.pie(comp, values=ba_col, names=comp_col,
                      hole=0.4, color_discrete_sequence=estilos["paleta"])
-        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_traces(textposition="inside", textinfo="percent+label", sort=False)
     return _layout(fig, estilos, i18n.t("chart.ba_composition", lang))
 
 
@@ -375,7 +422,7 @@ def fig_ivi(tab, estilos, lang=None):
     sp, comp_name = label("species", lang), i18n.t("chart.component", lang)
     axis_title = i18n.t("chart.axis.ivi" if is_ivi else "chart.axis.relative", lang)
     dfm = tab.melt(id_vars=[sp], value_vars=comps, var_name=comp_name, value_name="value")
-    ordem = tab.sort_values(total_col)[sp].tolist()
+    ordem = ordem_especies(tab[sp])[::-1]            # fixed order, first species on top
     fig = px.bar(dfm, y=sp, x="value", color=comp_name, orientation="h",
                  color_discrete_sequence=estilos["paleta"],
                  category_orders={sp: ordem}, labels={"value": axis_title})
@@ -392,7 +439,7 @@ def fig_phyto_100(tab, estilos, lang=None):
     comps = [c for c in ["rel_density", "rel_dominance", "rel_frequency"] if c in tab.columns]
     cmap = species_colors(tab["species"].unique())
     fig = go.Figure()
-    for _, row in tab.sort_values(comps[-1], ascending=False).iterrows():
+    for _, row in tab.iloc[sorted(range(len(tab)), key=lambda i: chave_especie(tab["species"].iloc[i]))].iterrows():
         vals = [row[c] for c in comps]
         fig.add_trace(go.Bar(x=[label(c, lang) for c in comps], y=vals, name=species_name(row["species"], lang),
                              marker_color=cmap[row["species"]],
@@ -481,7 +528,7 @@ def fig_altura_dap(res, estilos, lang=None, species=None):
     fig = px.scatter(dd, x="dbh", y="height", color=sp, color_discrete_map=cmap,
                      labels={"dbh": label("dbh", lang), "height": label("height", lang)})
     detalhes = []
-    for esp in dd[sp].unique():
+    for esp in ordem_especies(dd[sp]):
         sub = dd[dd[sp] == esp]
         if len(sub) > 1:
             m = np.polyfit(sub["dbh"], sub["height"], 1)
@@ -521,8 +568,9 @@ def fig_perfil_vertical(res, estilos, lang=None, kind="bubbles", strata_width=1.
     dd["x"] = np.arange(len(dd))
     cmap = _cmap(dd["species_label"].unique(), lang)
     fig = go.Figure()
-    hover = (i18n.t("chart.hover_height", lang) + "<br>" + i18n.t("chart.hover_dbh", lang))
-    for raw in dd["species_label"].unique():
+    hover = (i18n.t("chart.hover_height", lang).replace("{u}", _un.altura_unidade()) + "<br>"
+             + i18n.t("chart.hover_dbh", lang))
+    for raw in ordem_especies(dd["species_label"]):
         esp = species_name(raw, lang)
         sub = dd[dd["species_label"] == raw]
         fig.add_trace(go.Scatter(
@@ -536,8 +584,8 @@ def fig_perfil_vertical(res, estilos, lang=None, kind="bubbles", strata_width=1.
     hd = res["summary"].get("canopy_height_m", 0)
     if hd:
         fig.add_hline(y=hd, line_dash="dot", line_color="gray",
-                      annotation_text=i18n.t("chart.canopy_mean", lang,
-                                             h=_num(hd, 1, lang)))
+                      annotation_text=i18n.t("chart.canopy_mean", lang, h=_num(hd, 2, lang),
+                                             u=_un.altura_unidade()))
     fig.update_layout(xaxis_title=i18n.t("chart.trees_by_height", lang),
                       yaxis_title=label("height", lang),
                       xaxis_showticklabels=False)
@@ -566,7 +614,7 @@ def _perfil_alt(res, dd, estilos, lang, kind, strata_width):
     if kind == "stems":
         dd = dd.sort_values("height").reset_index(drop=True)
         dd["x"] = np.arange(len(dd))
-        for raw in dd["species_label"].unique():
+        for raw in ordem_especies(dd["species_label"]):
             esp = species_name(raw, lang)
             sub = dd[dd["species_label"] == raw]
             xs, ys = [], []
@@ -582,17 +630,17 @@ def _perfil_alt(res, dd, estilos, lang, kind, strata_width):
         top = np.ceil(dd["height"].max() / w) * w
         bins = np.arange(0, top + w, w)
         dd["_c"] = pd.cut(dd["height"], bins=bins, right=False)
-        for raw in dd["species_label"].unique():
+        for raw in ordem_especies(dd["species_label"]):
             esp = species_name(raw, lang)
             cnt = dd[dd["species_label"] == raw].groupby("_c", observed=False).size()
             fig.add_trace(go.Bar(y=[f"{_num(iv.left, 1, lang)} a {_num(iv.right, 1, lang)}" for iv in cnt.index],
                                  x=cnt.values, orientation="h", name=esp,
                                  marker_color=cmap.get(esp, "#555")))
         fig.update_layout(barmode="stack", xaxis_title=i18n.t("chart.n_stems", lang),
-                          yaxis_title=i18n.t("chart.height_class", lang))
+                          yaxis_title=i18n.t("chart.height_class", lang).replace("{u}", _un.altura_unidade()))
         return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
     else:  # violin: only species with at least two heights
-        for raw in dd["species_label"].unique():
+        for raw in ordem_especies(dd["species_label"]):
             esp = species_name(raw, lang)
             sub = dd[dd["species_label"] == raw]
             if sub["height"].notna().sum() < 2:
@@ -603,7 +651,8 @@ def _perfil_alt(res, dd, estilos, lang, kind, strata_width):
         fig.update_layout(yaxis_title=label("height", lang), showlegend=False)
     if hd:
         fig.add_hline(y=hd, line_dash="dot", line_color="gray",
-                      annotation_text=i18n.t("chart.canopy_mean", lang, h=_num(hd, 1, lang)))
+                      annotation_text=i18n.t("chart.canopy_mean", lang, h=_num(hd, 2, lang),
+                                             u=_un.altura_unidade()))
     return _layout(fig, estilos, i18n.t("chart.vertical_profile", lang))
 
 
@@ -666,12 +715,13 @@ def show_jimenez(container, df, estilos, key, lang=None, text="plot", group=None
     import streamlit as st
     T = i18n.t
     container.subheader(T("chart.jimenez_title", lang))
-    log = container.checkbox(T("chart.jimenez_log", lang), value=False, key=f"jim_log_{key}")
+    bar = barra(container)                        # log scale sits with Adjust and Chart table
+    log = bar.checkbox(T("chart.jimenez_log", lang), value=False, key=f"jim_log_{key}")
     fig = fig_jimenez(df, estilos, lang, text, group, log)
     if fig is None:
         container.info(T("chart.jimenez_nodata", lang))
         return
-    show(container, fig, key, estilos)
+    show(container, fig, key, estilos, barra=bar)
     container.caption(T("chart.jimenez_note", lang))
 
 
@@ -753,7 +803,7 @@ def fig_species_plots_stacked(df_long, estilos, ylabel, chart="stack", show_valu
     cores = species_colors(df["species"].unique())
     fig = go.Figure()
     for cond, pattern in (("live", ""), ("dead", "/")):
-        for sp in sorted(df["species"].unique(), key=str):
+        for sp in ordem_especies(df["species"].unique()):
             sub = df[(df["species"] == sp) & (df["condition"] == cond)].set_index("plot").reindex(plots)
             if sub["_v"].fillna(0).sum() == 0:
                 continue
@@ -761,7 +811,7 @@ def fig_species_plots_stacked(df_long, estilos, ylabel, chart="stack", show_valu
             vals = sub["_v"].fillna(0)
             fig.add_trace(go.Bar(
                 x=plots, y=vals, name=f"{species_name(sp, lang)} · {i18n.t('condition.' + cond, lang)}",
-                legendrank=10 * sorted(df["species"].unique(), key=str).index(sp) + (0 if cond == "live" else 1),
+                legendrank=10 * ordem_especies(df["species"].unique()).index(sp) + (0 if cond == "live" else 1),
                 text=[num(v, 0 if chart == "stack100" else 2, lang) if v else "" for v in vals]
                 if show_values else None, textposition="inside",
                 marker=dict(color=cor if cond == "live" else "white", line=dict(color=cor, width=1.2),
@@ -902,7 +952,7 @@ def serie_por_especie(resultados):
         if len(sheets) < 2:
             continue
         have = set(zip(g["_sheet"], g["species"]))
-        for esp in g["species"].unique():
+        for esp in ordem_especies(g["species"]):
             for sh in sheets:
                 if (sh, esp) not in have:
                     extra.append({"year": ano, "species": esp, "_sheet": sh,
@@ -1067,31 +1117,41 @@ def validation_banner(issues_by_unit, lang=None):
         icon_note(st, "verificacao", i18n.t("panel.banner", lang, errors=n_err, warnings=n_warn))
 
 
-def to_excel_bytes(res, lang=None):
-    """Gera um .xlsx com as tabelas calculadas (layout inspirado na planilha base)."""
+def tabelas_exportacao(res, lang=None):
+    """{sheet name: table} of a single-plot result, for every export format."""
     lang = _lang(lang)
     S = lambda k: i18n.t(f"sheet.{k}", lang)
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as xls:
-        resumo_para_df(res, lang).to_excel(xls, sheet_name=S("summary"), index=False)
-        te = tabela_por_especie(res, lang)
-        if te is not None and not te.empty:
-            te.round(3).to_excel(xls, sheet_name=S("by_species"), index=False)
-        if res["importance"] is not None and not res["importance"].empty:
-            for_display(res["importance"], lang=lang).round(3).to_excel(
-                xls, sheet_name=S("ivi"), index=False)
-        if res["dbh_density"] is not None and not res["dbh_density"].empty:
-            for_display(res["dbh_density"], lang=lang).round(2).to_excel(
-                xls, sheet_name=S("density_classes"))
-        if res["dbh_ba"] is not None and not res["dbh_ba"].empty:
-            for_display(res["dbh_ba"], lang=lang).round(4).to_excel(
-                xls, sheet_name=S("dominance_classes"))
-        for_display(res["data"], data_table=True, lang=lang, text_ids=False).to_excel(
-            xls, sheet_name=S("data"), index=False)
-        issues_frame_by_unit({"": res.get("issues", [])}, lang=lang).to_excel(
-            xls, sheet_name=S("issues"), index=False)
-    buf.seek(0)
-    return buf.getvalue()
+    out = {S("summary"): resumo_para_df(res, lang)}
+    te = tabela_por_especie(res, lang)
+    if te is not None and not te.empty:
+        out[S("by_species")] = te
+    if res["importance"] is not None and not res["importance"].empty:
+        out[S("ivi")] = for_display(res["importance"], lang=lang)
+    if res["dbh_density"] is not None and not res["dbh_density"].empty:
+        out[S("density_classes")] = for_display(res["dbh_density"], lang=lang)
+    if res["dbh_ba"] is not None and not res["dbh_ba"].empty:
+        out[S("dominance_classes")] = for_display(res["dbh_ba"], lang=lang)
+    out[S("data")] = for_display(res["data"], data_table=True, lang=lang, text_ids=False)
+    out[S("issues")] = issues_frame_by_unit({"": res.get("issues", [])}, lang=lang)
+    return out
+
+
+def to_excel_bytes(res, lang=None):
+    """Organised .xlsx with the calculated tables (one sheet each)."""
+    return _exp.bytes_xlsx(tabelas_exportacao(res, lang), _lang(lang))
+
+
+def estilo2(df, lang=None, na_rep="-"):
+    """Styler that shows the float columns with two decimals (and the decimal and
+    thousands marks of the language); integer columns stay integers."""
+    lang = _lang(lang)
+    dec, mil = (",", ".") if str(lang).startswith("pt") else (".", ",")
+    sty = df.style
+    fl = [c for c in df.columns if pd.api.types.is_float_dtype(df[c])]
+    if fl:
+        sty = sty.format(subset=fl, precision=_exp.CASAS, decimal=dec, thousands=mil,
+                         na_rep=na_rep)
+    return sty
 
 
 # ---------------------------------------------------------------------------
@@ -1374,19 +1434,42 @@ def _year_axis(fig, df, gaps=False):
     return fig
 
 
+#: parameters that have a standard deviation column in the yearly series
+SERIES_SD = {"height_mean_m": "height_sd_m"}
+SERIES_CHARTS = ("line", "markers", "bar", "hbar", "line_sd", "markers_sd", "bar_sd")
+
+
 def fig_series(df, estilos, y, view="plots", chart="line", lang=None, gaps=False):
     """One parameter over the years. With several plots: one trace per plot
-    (``view="plots"``) or the mean with a band / error bars of one SD (``view="mean"``)."""
+    (``view="plots"``) or the mean with a band / error bars of one SD (``view="mean"``).
+    ``chart``: line, markers, bar (columns), hbar (horizontal bars) and, for the parameters
+    that have a standard deviation (mean height), the ``_sd`` versions with error bars."""
     lang = _lang(lang)
     cores = estilos["paleta"]
     fig = go.Figure()
+    base = chart.replace("_sd", "")
+    sd_col = SERIES_SD.get(y) if chart.endswith("_sd") and SERIES_SD.get(y) in df.columns else None
+    horiz = base == "hbar"
     plots = list(dict.fromkeys(df["plot"])) if "plot" in df.columns else [None]
+
+    def _xy(x, v):
+        return (v, x) if horiz else (x, v)
+
+    def _err(arr):
+        if arr is None:
+            return {}
+        key = "error_x" if horiz else "error_y"
+        return {key: dict(type="data", array=list(arr), visible=True, thickness=1.2)}
+
     if view == "mean" and len(plots) > 1:
         g = df.groupby("year")[y].agg(["mean", "std", "count"]).reset_index().fillna({"std": 0})
-        if chart == "bar":
-            fig.add_trace(go.Bar(x=g["year"], y=g["mean"], marker_color=cores[0],
-                                 error_y=dict(type="data", array=g["std"], visible=True),
-                                 name=i18n.t("temporal.view.mean", lang)))
+        xs, ys = _xy(g["year"], g["mean"])
+        if base in ("bar", "hbar"):
+            fig.add_trace(go.Bar(x=xs, y=ys, marker_color=cores[0], orientation="h" if horiz else "v",
+                                 name=i18n.t("temporal.view.mean", lang), **_err(g["std"])))
+        elif base == "markers":
+            fig.add_trace(go.Scatter(x=g["year"], y=g["mean"], mode="markers", marker=dict(color=cores[0], size=9),
+                                     name=i18n.t("temporal.view.mean", lang), **_err(g["std"])))
         else:
             band = pd.concat([g["year"], g["year"][::-1]])
             fig.add_trace(go.Scatter(x=band, y=pd.concat([g["mean"] + g["std"], (g["mean"] - g["std"])[::-1]]),
@@ -1399,16 +1482,31 @@ def fig_series(df, estilos, y, view="plots", chart="line", lang=None, gaps=False
             sub = df if p is None else df[df["plot"] == p]
             sub = sub.sort_values("year")
             nome = str(p) if p is not None else label(y, lang)
-            if chart == "bar":
-                fig.add_trace(go.Bar(x=sub["year"], y=sub[y], name=nome, marker_color=cores[i % len(cores)]))
+            cor = cores[i % len(cores)]
+            err = sub[sd_col].fillna(0) if sd_col else None
+            if base in ("bar", "hbar"):
+                xs, ys = _xy(sub["year"], sub[y])
+                fig.add_trace(go.Bar(x=xs, y=ys, name=nome, marker_color=cor,
+                                     orientation="h" if horiz else "v", **_err(err)))
+            elif base == "markers":
+                fig.add_trace(go.Scatter(x=sub["year"], y=sub[y], mode="markers", name=nome,
+                                         marker=dict(color=cor, size=9), **_err(err)))
             else:
                 fig.add_trace(go.Scatter(x=sub["year"], y=sub[y], mode="lines+markers", name=nome,
-                                         line=dict(color=cores[i % len(cores)])))
+                                         line=dict(color=cor), **_err(err)))
         fig.update_layout(barmode="group", showlegend=len(plots) > 1)
+    if horiz:
+        fig.update_layout(xaxis_title=label(y, lang), yaxis_title=label("year", lang))
+        anos = sorted({int(a) for a in df["year"].dropna()})
+        fig.update_yaxes(type="category", categoryorder="array", categoryarray=[str(a) for a in anos][::-1])
+        for tr in fig.data:                      # category axis: years as text
+            if getattr(tr, "y", None) is not None:
+                tr.y = [str(int(v)) for v in tr.y]
+        return _layout(fig, estilos, label(y, lang))
     fig.update_layout(xaxis_title=label("year", lang), yaxis_title=label(y, lang))
     # the mean ± SD band needs a numeric axis
     return _year_axis(_layout(fig, estilos, label(y, lang)), df,
-                      gaps=gaps or (view == "mean" and chart == "line" and len(plots) > 1))
+                      gaps=gaps or (view == "mean" and base == "line" and len(plots) > 1))
 
 
 def palette_species_colors(species, estilos):
@@ -1430,7 +1528,7 @@ def fig_species_live_dead(df_esp, estilos, metric, chart="stack", show_values=Fa
     viva, morta, total = LIVE_DEAD_METRICS[metric]
     df = df_esp.sort_values("year").copy()
     tot = df.groupby("year")[total].transform("sum")
-    order = df.groupby("species")[total].mean().sort_values(ascending=False).index.tolist()
+    order = ordem_especies(df["species"])
     cores = palette_species_colors(df["species"].unique(), estilos)
     fig = go.Figure()
     for cond, col, pattern in (("live", viva, ""), ("dead", morta, "/")):
@@ -1473,7 +1571,7 @@ def fig_species_series(df_esp, estilos, metric, chart="line", show_values=False,
                                      else "stack", show_values, lang, gaps)
     lang = _lang(lang)
     df = df_esp.sort_values("year").copy()
-    order = (df.groupby("species")[metric].mean().sort_values(ascending=False).index.tolist())
+    order = ordem_especies(df["species"])
     fig = go.Figure()
     if chart == "stack100":
         tot = df.groupby("year")[metric].transform("sum")
@@ -1581,7 +1679,7 @@ def fig_plot_difference(df_esp, estilos, plot_a, plot_b, metric, lang=None, gaps
     years = sorted(set(a.index) & set(b.index))
     if not years:
         return None
-    sps = sorted(set(a.columns) | set(b.columns), key=str)
+    sps = ordem_especies(set(a.columns) | set(b.columns))
     a = a.reindex(index=years, columns=sps).fillna(0)
     b = b.reindex(index=years, columns=sps).fillna(0)
     cores = species_colors(sps)
@@ -1603,6 +1701,9 @@ def fig_plot_difference(df_esp, estilos, plot_a, plot_b, metric, lang=None, gaps
 def style_controls(container, page, paleta_nome, show_seal):
     """Sidebar sliders that set the look of every chart of the page; returns ``estilos``."""
     T = i18n.t
+    if page != "__no_unit__":                      # height unit: shown, saved and printed
+        container.radio(T("sidebar.height_unit"), _un.UNIDADES, horizontal=True,
+                        key="unidade_altura", help=T("sidebar.height_unit_help"))
     with container.expander(T("style.more"), expanded=False):
         tt = st_slider(T("sidebar.title_font"), 10, 24, 14, f"tit_{page}")
         ta = st_slider(T("sidebar.axis_font"), 8, 20, 11, f"eix_{page}")
@@ -1681,47 +1782,127 @@ def pdf_block(container, name, build, file_name, sig, lang=None):
         container.caption(T("export.pdf_figures_note"))
 
 
-def show(container, fig, key, estilos=None):
+def barra(container):
+    """Row above a chart that holds its own choices (menus, checkboxes) on the left; ``show``
+    adds the Adjust and Chart table buttons to the same row."""
+    return container.container(horizontal=True, vertical_alignment="bottom", gap="small")
+
+
+def _num_or_none(txt):
+    try:
+        return float(str(txt).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def ajustes_grupo(container, key, estilos, graficos):
+    """Compact "Adjust" menu for several charts: height and bar width for all, and the Y limits
+    of ONE chart at a time (picked in the menu; the values of the others are kept).
+    ``graficos`` is {chart id: label}. Returns the settings that ``show`` takes as ``comum``."""
+    import streamlit as st
+    T = i18n.t
+    estilos = estilos or {}
+    memo = st.session_state.setdefault(f"grpmemo_{key}", {})
+    out = {"ymin": {}, "ymax": {}}
+    with container.popover(T("chart.adjust"), icon=":material/tune:") as pop:
+        c1, c2 = pop.columns(2)
+        out["h"] = c1.number_input(T("style.height"), 200, 1600, int(estilos.get("height") or 450),
+                                   step=10, key=f"grpadjh_{key}")
+        out["bw"] = c2.slider(T("style.bar_width"), 10, 100, int(100 * estilos.get("bar_width", 0.8)),
+                              key=f"grpadjb_{key}")
+        if graficos:
+            ids = list(graficos)
+            sel = pop.selectbox(T("chart.adjust_which"), ids, key=f"grpsel_{key}",
+                                format_func=lambda g: graficos[g])
+            m0, m1 = memo.get(sel, ("", ""))
+            d1, d2 = pop.columns(2)
+            memo[sel] = (d1.text_input(T("style.ymin"), m0, key=f"grpy0_{key}_{sel}"),
+                         d2.text_input(T("style.ymax"), m1, key=f"grpy1_{key}_{sel}"))
+    for gid in graficos:
+        v0, v1 = memo.get(gid, ("", ""))
+        out["ymin"][gid], out["ymax"][gid] = v0, v1
+    return out
+
+
+def tabelas_grupo(container, key, figs, lang=None):
+    """Compact "Chart tables" menu: pick which charts, then download them (Excel with a sheet
+    per chart, or ZIP of CSV / TXT). ``figs`` is {label: figure}."""
+    T = i18n.t
+    tabs = {}
+    for rot, fig in figs.items():
+        tb = _exp.tabela_da_figura(fig)
+        if tb is not None and not tb.empty:
+            tabs[rot] = tb
+    if not tabs:
+        return
+    with container.popover(T("chart.tables_all"), icon=":material/table_view:") as pop:
+        esc = pop.multiselect(T("chart.tables_pick"), list(tabs), default=list(tabs),
+                              key=f"grptab_{key}")
+        if esc:
+            _exp.botoes(pop, None, f"MangueTREE_{key}", f"grptab_dl_{key}", _lang(lang),
+                        tabelas={r: tabs[r] for r in esc}, lado_a_lado=False)
+
+
+def show(container, fig, key, estilos=None, barra=None, comum=None, gid=None, botoes=True):
     """Draw ``fig`` with a small "Ajustar" menu above it (bar width, y limits, height of
-    this chart only). The page-wide defaults come from ``estilos``."""
+    this chart only) and the "Tabela do gráfico" menu. The page-wide defaults come from
+    ``estilos``. With ``comum`` (settings of ``ajustes_grupo``, ``gid`` the chart id in it) the
+    chart has no buttons of its own: a group menu serves all the charts of the section. With
+    ``botoes=False`` the chart has no buttons at all.
+    Returns the figure as drawn."""
     import streamlit as st
     if fig is None:
-        return
+        return None
     T = i18n.t
     estilos = estilos or {}
     has_bars = any(getattr(tr, "type", "") == "bar" for tr in fig.data)
-    with container.popover(T("chart.adjust"), icon=":material/tune:"):
-        ca, cb = st.columns(2)
-        h = ca.number_input(T("style.height"), 200, 1600, int(estilos.get("height") or fig.layout.height or 450),
-                            step=10, key=f"adjh_{key}")
-        full = cb.checkbox(T("style.full_width"), value=estilos.get("width") is None, key=f"adjfull_{key}")
-        w = None if full else cb.number_input(T("style.width"), 300, 2400, int(estilos.get("width") or 800),
-                                              step=10, key=f"adjw_{key}")
-        bw = st.slider(T("style.bar_width"), 10, 100, int(100 * estilos.get("bar_width", 0.8)),
-                       key=f"adjb_{key}") if has_bars else None
-        c1, c2 = st.columns(2)
-        ymin = c1.text_input(T("style.ymin"), "", key=f"adjy0_{key}")
-        ymax = c2.text_input(T("style.ymax"), "", key=f"adjy1_{key}")
-        novos = {}
-        if st.checkbox(T("style.edit_texts"), value=False, key=f"adjtxt_{key}"):
-            st.caption(T("style.edit_texts_hint"))
-            atual_t = getattr(fig.layout.title, "text", None) or ""
-            atual_x = getattr(fig.layout.xaxis.title, "text", None) or ""
-            atual_y = getattr(fig.layout.yaxis.title, "text", None) or ""
-            novos["title"] = st.text_input(T("style.chart_title"), "", placeholder=atual_t,
-                                           key=f"adjtit_{key}")
-            if atual_x:
-                novos["x"] = st.text_input(T("style.x_title"), "", placeholder=atual_x,
-                                           key=f"adjxt_{key}")
-            if atual_y:
-                novos["y"] = st.text_input(T("style.y_title"), "", placeholder=atual_y,
-                                           key=f"adjyt_{key}")
-            for i, tr in enumerate(fig.data[:15]):
-                if getattr(tr, "name", None) and tr.showlegend is not False and \
-                        getattr(tr, "type", "") in ("scatter", "bar", "box", "violin", "histogram"):
-                    novos[("trace", i)] = st.text_input(
-                        T("style.legend_name", name=tr.name), "", placeholder=str(tr.name),
-                        key=f"adjln_{key}_{i}")
+    novos = {}
+    w = None
+    if comum is not None:
+        h = int(comum.get("h") or estilos.get("height") or fig.layout.height or 450)
+        bw = comum.get("bw") if has_bars else None
+        ymin, ymax = comum.get("ymin", {}).get(gid, ""), comum.get("ymax", {}).get(gid, "")
+        barra = None
+    elif not botoes:                              # chart without the Adjust and Table buttons
+        h = int(estilos.get("height") or fig.layout.height or 450)
+        bw, ymin, ymax = None, "", ""
+        barra = None
+    else:
+        # Ajustar and Tabela do grafico: two small buttons in one row, right above the chart
+        if barra is None:
+            barra = container.container(horizontal=True, horizontal_alignment="right", gap="xsmall",
+                                        vertical_alignment="bottom")
+        with barra.popover(T("chart.adjust"), icon=":material/tune:"):
+            ca, cb = st.columns(2)
+            h = ca.number_input(T("style.height"), 200, 1600, int(estilos.get("height") or fig.layout.height or 450),
+                                step=10, key=f"adjh_{key}")
+            full = cb.checkbox(T("style.full_width"), value=estilos.get("width") is None, key=f"adjfull_{key}")
+            w = None if full else cb.number_input(T("style.width"), 300, 2400, int(estilos.get("width") or 800),
+                                                  step=10, key=f"adjw_{key}")
+            bw = st.slider(T("style.bar_width"), 10, 100, int(100 * estilos.get("bar_width", 0.8)),
+                           key=f"adjb_{key}") if has_bars else None
+            c1, c2 = st.columns(2)
+            ymin = c1.text_input(T("style.ymin"), "", key=f"adjy0_{key}")
+            ymax = c2.text_input(T("style.ymax"), "", key=f"adjy1_{key}")
+            if st.checkbox(T("style.edit_texts"), value=False, key=f"adjtxt_{key}"):
+                st.caption(T("style.edit_texts_hint"))
+                atual_t = getattr(fig.layout.title, "text", None) or ""
+                atual_x = getattr(fig.layout.xaxis.title, "text", None) or ""
+                atual_y = getattr(fig.layout.yaxis.title, "text", None) or ""
+                novos["title"] = st.text_input(T("style.chart_title"), "", placeholder=atual_t,
+                                               key=f"adjtit_{key}")
+                if atual_x:
+                    novos["x"] = st.text_input(T("style.x_title"), "", placeholder=atual_x,
+                                               key=f"adjxt_{key}")
+                if atual_y:
+                    novos["y"] = st.text_input(T("style.y_title"), "", placeholder=atual_y,
+                                               key=f"adjyt_{key}")
+                for i, tr in enumerate(fig.data[:15]):
+                    if getattr(tr, "name", None) and tr.showlegend is not False and \
+                            getattr(tr, "type", "") in ("scatter", "bar", "box", "violin", "histogram"):
+                        novos[("trace", i)] = st.text_input(
+                            T("style.legend_name", name=tr.name), "", placeholder=str(tr.name),
+                            key=f"adjln_{key}_{i}")
     fig.update_layout(height=h)
     for chave_, txt in novos.items():           # empty box keeps the original text
         if not txt.strip():
@@ -1738,18 +1919,20 @@ def show(container, fig, key, estilos=None):
         fig.update_layout(width=int(w), autosize=False)
     if bw is not None:
         fig.update_layout(bargap=1 - bw / 100.0)
-
-    def _f(txt):
-        try:
-            return float(str(txt).replace(",", "."))
-        except ValueError:
-            return None
-    lo, hi = _f(ymin), _f(ymax)
+    lo, hi = _num_or_none(ymin), _num_or_none(ymax)
     if lo is not None or hi is not None:          # None keeps that end automatic
         fig.update_layout(yaxis_range=[lo, hi], yaxis_autorange=None)
     add_seal(fig)
     _register_fig(key, fig)
+    if barra is not None:
+        tabela = _exp.tabela_da_figura(fig)
+        if tabela is not None and not tabela.empty:
+            with barra.popover(T("chart.table"), icon=":material/table_view:"):
+                st.caption(T("chart.table_hint"))
+                _exp.botoes(st, tabela, f"MangueTREE_{key}", f"tab_{key}", _lang(None),
+                            lado_a_lado=False)
     container.plotly_chart(fig, width=int(w) if w else "stretch", config=PLOT_CONFIG, key=f"fig_{key}")
+    return fig
 
 
 _ZIP_JS = r"""

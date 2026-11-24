@@ -20,6 +20,7 @@ import pandas as pd
 
 from manguetree import calc as mc
 from manguetree import charts as ui
+from manguetree import exportar
 from manguetree import io as mio
 from manguetree import i18n
 from manguetree.i18n import t
@@ -127,6 +128,7 @@ ui.validation_banner(issues_unica, LANG)
 res = mc.analyze(df, area_final, RESOLVER, dbh_limits=limites,
                  plot_name=plot_name,
                  class_width=largura_classe, missing_condition=cond_faltante)
+res = ui.na_unidade(res)           # heights in the unit chosen in the sidebar (m or cm)
 r = res["summary"]
 
 # ---------------- DASHBOARD ----------------
@@ -166,25 +168,25 @@ with tabs[0]:
     st.subheader(t("single.structural"))
     # order asked by the lab: DBH, mean height, canopy, live density, live basal area;
     # every card has the same size (the SD sits on the value line, not below it)
-    UN = st.radio(t("units.label"), ("ha", "count"), horizontal=True, key="units_unica",
-                  format_func=lambda k: t(f"units.{k}"))
-    _dens_card = ((L("density_live_ha"), N(r["density_live_ha"], 0)) if UN == "ha"
-                  else (L("n_live"), f"{r['n_live']}"))
+    UN = "ha"                                   # structure is always in stems per hectare
+    _dens_card = (L("density_live_ha"), N(r["density_live_ha"], 2))
     cards = ((L("mean_dbh_cm"), N(r["mean_dbh_cm"], 2)),
              (L("height_mean_m"), f"{N(r['height_mean_m'], 2)} ± {N(r['height_sd_m'], 2)}"),
              (L("canopy_height_m"), N(r["canopy_height_m"], 2)),
              _dens_card,
              (L("ba_live_ha"), N(r["ba_live_ha"], 2)),
              (L("ba_total_ha"), N(r["ba_total_ha"], 2)),
-             (L("mortality_stems_pct"), N(r["mortality_stems_pct"], 1)),
-             (L("mortality_ba_pct"), N(r["mortality_ba_pct"], 1)),
+             (L("mortality_stems_pct"), N(r["mortality_stems_pct"], 2)),
+             (L("mortality_ba_pct"), N(r["mortality_ba_pct"], 2)),
              (L("stems_per_tree"), N(r["stems_per_tree"], 2)),
              (L("complexity_2_5"), N(res["complexity"]["dbh_gt_2.5"]["ci"], 2)),
              (L("complexity_10"), N(res["complexity"]["dbh_gt_10"]["ci"], 2)),
              (L("n_species_live"), f"{r['n_species_live']}"))
     for linha in (cards[0:6], cards[6:12]):
         for col, (lab, val) in zip(st.columns(len(linha)), linha):
-            col.metric(lab, val, border=True)
+            # the live-density card carries the number of stems in the plot under its value
+            sub = t("single.n_in_plot", n=int(r["n_live"])) if lab == _dens_card[0] else "\u00a0"
+            col.metric(lab, val, delta=sub, delta_color="off", delta_arrow="off", border=True)
     st.caption(t("method.heights_live_only"))
     st.caption(t("method.mean_dbh"))
 
@@ -241,52 +243,57 @@ with tabs[1]:
     st.subheader(t("single.phyto_table"))
     ivi = res["importance"]
     if ivi is not None and not ivi.empty:
-        st.dataframe(ui.for_display(ivi, lang=LANG).style.format(precision=2),
+        st.dataframe(ui.estilo2(ui.for_display(ivi, lang=LANG), LANG),
                      width="stretch")
         if "ivi" not in ivi.columns:
             st.caption(t("method.ivi_needs_units"))
-        st.markdown(t("phyto.legend"))
-        pct_f = st.checkbox(t("single.as_pct"), value=False, key="pct_fito")
+        bar = ui.barra(st)
+        pct_f = bar.checkbox(t("single.as_pct"), value=False, key="pct_fito")
         fig = ui.fig_phyto_100(ivi, estilos, LANG) if pct_f else ui.fig_ivi(ivi, estilos, LANG)
         if fig:
-            ui.show(st, fig, "1_1", estilos)
+            ui.show(st, fig, "1_1", estilos, barra=bar)
+        st.caption(t("phyto.legend"))
     st.divider()
     st.subheader(t("single.ba_composition"))
-    tipo = st.radio(t("single.chart_type"), ("pie", "treemap"), horizontal=True, key="tipo_ba_unica",
-                    format_func=lambda k: t(f"single.chart_type.{k}", LANG))
+    bar = ui.barra(st)
+    tipo = bar.selectbox(t("single.chart_type"), ("pie", "treemap"), key="tipo_ba_unica", width=200,
+                         format_func=lambda k: t(f"single.chart_type.{k}", LANG))
     fig_c = ui.fig_composicao_ba(res, estilos, tipo, LANG)
     if fig_c:
-        ui.show(st, fig_c, "1_2", estilos)
+        ui.show(st, fig_c, "1_2", estilos, barra=bar)
+        st.caption(t("single.note.composition"))
 
 # --- TAB 3: CLASSES DE DAP ---
 with tabs[2]:
     ui.report_section(t("single.tab.classes"))
     st.subheader(t("single.dbh_distribution"))
     st.caption(t("method.dbh_classes"))
-    metrica = st.radio(t("single.metric"), ("density", "basal_area"), horizontal=True, key="metrica_unica",
-                       format_func=lambda k: t(f"metric.{k}", LANG))
-    pct_c = st.checkbox(t("single.as_pct"), value=False, key="pct_classes")
-    UN_c = st.radio(t("units.label"), ("ha", "count"), horizontal=True, key="units_classes",
-                    format_func=lambda k: t(f"units.{k}")) if metrica == "density" and not pct_c else "ha"
+    bar = ui.barra(st)
+    metrica = bar.selectbox(t("single.metric"), ("density", "basal_area"), key="metrica_unica",
+                            width=200, format_func=lambda k: t(f"metric.{k}", LANG))
+    pct_c = bar.checkbox(t("single.as_pct"), value=False, key="pct_classes")
+    UN_c = "ha"
     dens_cl = res["dbh_density"] if UN_c == "ha" else res["dbh_density"] * (area_final / 10000.0)
     fig_cl = ui.fig_classes_dap(dens_cl, res["dbh_ba"], estilos, metrica, LANG, pct=pct_c)
     if fig_cl is not None and UN_c == "count":
         fig_cl.update_layout(yaxis_title=ui.label("n_live", LANG))
     if fig_cl:
-        ui.show(st, fig_cl, "1_3", estilos)
+        ui.show(st, fig_cl, "1_3", estilos, barra=bar)
+        st.caption(t("single.note.classes"))
     c1_, c2_ = st.columns(2)
     with c1_:
         st.caption(ui.label("density_ha", LANG))
-        st.dataframe(ui.for_display(res["dbh_density"], lang=LANG).style.format("{:.1f}"),
+        st.dataframe(ui.estilo2(ui.for_display(res["dbh_density"], lang=LANG), LANG),
                      width="stretch")
     with c2_:
         st.caption(ui.label("ba_ha", LANG))
-        st.dataframe(ui.for_display(res["dbh_ba"], lang=LANG).style.format("{:.3f}"),
+        st.dataframe(ui.estilo2(ui.for_display(res["dbh_ba"], lang=LANG), LANG),
                      width="stretch")
     st.divider()
     fig_h = ui.fig_hist_dap(res, estilos, LANG)
     if fig_h:
         ui.show(st, fig_h, "1_4", estilos)
+        st.caption(t("single.note.hist"))
 
     st.divider()
     st.subheader(t("single.diameter_q"))
@@ -298,8 +305,8 @@ with tabs[2]:
         cq1, cq2 = st.columns([2, 1])
         with cq1:
             st.dataframe(ui.for_display(dist, lang=LANG).style.format({
-                         ui.label("midpoint_cm", LANG): "{:.1f}",
-                         ui.label("density_ha", LANG): "{:.0f}",
+                         ui.label("midpoint_cm", LANG): "{:.2f}",
+                         ui.label("density_ha", LANG): "{:.2f}",
                          ui.label("q", LANG): "{:.2f}"}, na_rep="-"),
                          width="stretch")
         with cq2:
@@ -313,13 +320,17 @@ with tabs[2]:
 with tabs[3]:
     ui.report_section(t("single.tab.height"))
     st.subheader(t("single.height_dbh"))
-    esp_disp = [s_ for s_ in res["data"].loc[res["data"]["live"], "species_label"].dropna().unique()]
-    esp_sel = st.multiselect(t("single.regression_species"), esp_disp, default=esp_disp,
-                             key="esp_regressao", format_func=lambda v: ui.species_name(v, LANG))
+    esp_disp = ui.ordem_especies(res["data"].loc[res["data"]["live"], "species_label"].dropna())
+    bar = ui.barra(st)
+    with bar.popover(t("single.regression_species"), icon=":material/filter_list:"):
+        esp_sel = st.multiselect(t("single.regression_species"), esp_disp, default=esp_disp,
+                                 key="esp_regressao", label_visibility="collapsed",
+                                 format_func=lambda v: ui.species_name(v, LANG))
     fig_s, det = ui.fig_altura_dap(res, estilos, LANG, species=esp_sel)
     if fig_s:
         cg_, cd_ = st.columns([3, 2])
-        ui.show(cg_, fig_s, "1_6", estilos)
+        ui.show(cg_, fig_s, "1_6", estilos, barra=bar)
+        cg_.caption(t("single.note.height_dbh"))
         if det:
             with cd_:
                 st.markdown("**" + t("single.regression_details") + "**")
@@ -328,16 +339,17 @@ with tabs[3]:
         st.warning(t("single.not_enough_height"))
     st.divider()
     st.subheader(t("single.vertical_profile"))
-    cpk, cpw = st.columns([3, 1])
-    with cpk:
-        kind = st.radio(t("single.profile_kind"), ui.PROFILE_KINDS, horizontal=True, key="perfil_tipo",
-                        format_func=lambda k: t(f"single.profile.{k}"))
-    with cpw:
-        largura_h = st.number_input(t("single.strata_width"), min_value=0.25, value=1.0, step=0.25,
-                                    key="perfil_largura") if kind == "strata" else 1.0
+    bar = ui.barra(st)
+    kind = bar.selectbox(t("single.profile_kind"), ui.PROFILE_KINDS, key="perfil_tipo", width=260,
+                         format_func=lambda k: t(f"single.profile.{k}"))
+    _fh = 100.0 if ui.altura_unidade() == "cm" else 1.0
+    largura_h = bar.number_input(t("single.strata_width", u=ui.altura_unidade()), min_value=0.25 * _fh,
+                                 value=1.0 * _fh, step=0.25 * _fh, width=170,
+                                 key=f"perfil_largura_{ui.altura_unidade()}") if kind == "strata" else 1.0 * _fh
     fig_p = ui.fig_perfil_vertical(res, estilos, LANG, kind=kind, strata_width=largura_h)
     if fig_p:
-        ui.show(st, fig_p, "1_7", estilos)
+        ui.show(st, fig_p, "1_7", estilos, barra=bar)
+        st.caption(t("single.note.profile"))
     else:
         st.info(t("single.no_profile"))
 
@@ -367,17 +379,19 @@ with tabs[6]:
     _coords = mp.drop_duplicates().assign(plot=nome) if mp is not None and not mp.empty else None
     c1, c2, c3 = st.columns(3)
     with c1:
+        st.markdown("**" + t("export.pdf_title") + "**")
         ui.pdf_block(st, "unica", lambda figs: rep.single_plot_report(
             res, lang=LANG, seal=show_seal, figures=figs, panel_png=PANEL_PNG, coords=_coords),
             f"MangueTREE_{nome}.pdf", sig)
     with c2:
-        st.download_button(t("export.excel"), data=ui.to_excel_bytes(res, LANG),
-                           file_name=f"MangueTREE_{nome}.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        exportar.botoes(st, None, f"MangueTREE_{nome}", "exp_single_all", LANG,
+                        tabelas=ui.tabelas_exportacao(res, LANG),
+                        titulo=t("export.all_tables"), lado_a_lado=False,
+                        nota=t("export.all_tables_note"))
     with c3:
-        st.download_button(t("export.by_species_csv"),
-                           data=ui.tabela_por_especie(res, LANG).to_csv(index=False).encode("utf-8"),
-                           file_name=f"{t('file.by_species')}_{nome}.csv", mime="text/csv")
+        exportar.botoes(st, ui.tabela_por_especie(res, LANG), f"{t('file.by_species')}_{nome}",
+                        "exp_single_sp", LANG, titulo=t("export.by_species_csv"),
+                        lado_a_lado=False)
     st.caption(t("export.single_note"))
     st.divider()
     st.subheader(t("single.loaded_data"))

@@ -79,7 +79,8 @@ def test_palette_recolours_species():
     st.session_state[ui.PALETTE_STATE] = "lab"
     try:
         cores = ui.species_colors(["Rhizophora mangle", "Avicennia schaueriana"])
-        assert cores["Avicennia schaueriana"] == ui.PALETAS["lab"][0]
+        assert cores["Rhizophora mangle"] == ui.PALETAS["lab"][0]  # fixed order: Rhizophora first
+        assert cores["Avicennia schaueriana"] == ui.PALETAS["lab"][1]
     finally:
         st.session_state[ui.PALETTE_STATE] = "manguetree"
     assert ui.species_colors(["Rhizophora mangle"])["Rhizophora mangle"] == mc.species_color("Rhizophora mangle")

@@ -26,6 +26,7 @@ import streamlit as st
 
 from manguetree import calc as mc
 from manguetree import charts as ui
+from manguetree import exportar
 from manguetree import io as mio
 from manguetree import i18n
 from manguetree.i18n import t
@@ -222,6 +223,8 @@ if df_serie is None:
     st.info(t("temporal.confirm_prompt"))
     st.stop()
 df_esp = st.session_state.get("temp_esp")
+df_serie = ui.na_unidade(df_serie)             # heights in the unit chosen in the sidebar
+df_esp = ui.na_unidade(df_esp) if df_esp is not None else None
 ignoradas = st.session_state.get("temp_ignoradas", {})
 if ignoradas:
     st.caption(t("sheets.ignored") + " " + ", ".join(
@@ -252,26 +255,34 @@ tabs = st.tabs([t("temporal.tab.evolution"), t("temporal.tab.species"),
 with tabs[0]:
     ui.report_section(t("temporal.tab.evolution"))
     st.subheader(t("temporal.evolution"))
-    cm, cg = st.columns([2, 1])
-    with cm:
-        modo = st.radio(t("temporal.display_mode"), ("separate", "dual"),
-                        horizontal=True, key="modo_evol",
+    modo = st.selectbox(t("temporal.display_mode"), ("separate", "dual"), key="modo_evol", width=300,
                         format_func=lambda k: t(f"temporal.mode.{k}", LANG))
-    with cg:
-        grafico = st.radio(t("temporal.chart"), ("line", "bar"), horizontal=True, key="graf_evol",
-                           format_func=lambda k: t(f"temporal.chart.{k}"))
-    GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_evol")
     if modo == "separate":
         padrao = [p for p in ["mean_dbh_cm", "height_mean_m", "canopy_height_m",
                               "density_live_ha", "ba_live_ha"] if p in params]
         escolhidos = st.multiselect(t("temporal.parameters"), params, default=padrao,
                                     key="params_sep",
                                     format_func=lambda c: ui.label(c, LANG))
+        # one row: chart type, gaps, and the two menus that serve every chart below
+        bar_ev = ui.barra(st)
+        grafico = bar_ev.selectbox(t("temporal.chart"), ui.SERIES_CHARTS, key="graf_evol", width=270,
+                                   format_func=lambda k: t(f"temporal.chart.{k}"))
+        GAPS = bar_ev.checkbox(t("temporal.gaps_short"), value=False, key="gaps_evol",
+                               help=t("temporal.gaps"))
+        comum = ui.ajustes_grupo(bar_ev, "evol", estilos,
+                                 {p: ui.label(p, LANG) for p in escolhidos})
+        slot_tab = bar_ev.container()                 # the tables menu is filled after the charts
+        if grafico.endswith("_sd"):
+            st.caption(t("temporal.sd_hint"))
+        figs_ev = {}
         for a, b in zip(escolhidos[0::2], escolhidos[1::2] + [None]):
             ca, cb = st.columns(2)
             for col, p in ((ca, a), (cb, b)):
                 if p:
-                    ui.show(col, ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG, GAPS), f"evol_{p}", estilos)
+                    f_ = ui.show(col, ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG, GAPS),
+                                 f"evol_{p}", estilos, comum=comum, gid=p)
+                    figs_ev[ui.label(p, LANG)] = f_
+        ui.tabelas_grupo(slot_tab, "evol", figs_ev, LANG)
     else:
         st.caption(t("temporal.dual_hint"))
         cE, cD = st.columns(2)
@@ -288,6 +299,7 @@ with tabs[0]:
             ui.show(st, ui.fig_temporal_multi(base, estilos, esq, dire, LANG), "3_2", estilos)
         else:
             st.info(t("temporal.pick_each_axis"))
+    st.caption(t("temporal.series_note"))
     st.divider()
     _jim = df_serie.assign(label=df_serie["year"].astype(int).astype(str))
     ui.show_jimenez(st, _jim, estilos, "3_jim", LANG, text="label", group="plot")
@@ -299,30 +311,30 @@ with tabs[1]:
         st.info(t("temporal.no_species_data"))
     else:
         st.caption(t("temporal.species_hint"))
-        c1_, c2_, c3_ = st.columns([2, 2, 1])
-        with c1_:
-            opcoes_e = list(ui.LIVE_DEAD_METRICS) + list(mc.SPECIES_METRICS)
-            met_e = st.selectbox(t("temporal.species_metric"), opcoes_e,
-                                 index=opcoes_e.index("live_dead_ba"),
-                                 key="met_esp_temp", format_func=lambda c: ui.label(c, LANG))
-        with c2_:
-            tipo = st.radio(t("temporal.chart"), ("line", "bar", "stack", "stack100"),
-                            index=2, key="tipo_esp_temp", horizontal=True,
-                            format_func=lambda k: t(f"temporal.chart.{k}"))
-        with c3_:
-            valores = st.checkbox(t("temporal.show_values"), value=False, key="val_esp_temp")
-            GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_esp")
+        # menus and short checkboxes in the same row as Adjust and Chart table
+        bar_e = ui.barra(st)
+        opcoes_e = list(ui.LIVE_DEAD_METRICS) + list(mc.SPECIES_METRICS)
+        met_e = bar_e.selectbox(t("temporal.species_metric"), opcoes_e, width=230,
+                                index=opcoes_e.index("live_dead_ba"),
+                                key="met_esp_temp", format_func=lambda c: ui.label(c, LANG))
+        tipo = bar_e.selectbox(t("temporal.chart"), ("line", "bar", "stack", "stack100"), width=200,
+                               index=2, key="tipo_esp_temp",
+                               format_func=lambda k: t(f"temporal.chart.{k}"))
         if MULTI:
             _rot = {"__side__": t("temporal.side_by_side"), "__one__": t("temporal.one_species"),
                     "__diff__": t("temporal.difference"), "__mean__": t("temporal.all_plots_mean")}
-            escolha = st.selectbox(t("temporal.plot_choice"), list(_rot) + PLOTS, key="plot_esp_temp",
-                                   format_func=lambda p: _rot.get(p, p))
+            escolha = bar_e.selectbox(t("temporal.plot_choice"), list(_rot) + PLOTS, width=220,
+                                      key="plot_esp_temp", format_func=lambda p: _rot.get(p, p))
         else:
             escolha = PLOTS[0]
+        valores = bar_e.checkbox(t("temporal.values_short"), value=False, key="val_esp_temp",
+                                 help=t("temporal.show_values"))
+        GAPS = bar_e.checkbox(t("temporal.gaps_short"), value=False, key="gaps_esp",
+                              help=t("temporal.gaps"))
         if escolha in ("__one__", "__diff__"):
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
             if escolha == "__one__":
-                esp_1 = st.selectbox(t("temporal.species_pick"), sorted(df_esp["species"].unique(), key=str),
+                esp_1 = st.selectbox(t("temporal.species_pick"), ui.ordem_especies(df_esp["species"]),
                                      key="esp_uma", format_func=lambda v: ui.species_name(v, LANG))
                 f1 = ui.fig_one_species_plots(df_esp, estilos, esp_1, met_e, LANG, GAPS, valores)
             else:
@@ -331,17 +343,17 @@ with tabs[1]:
                 pb = d2.selectbox(t("temporal.plot_b"), PLOTS, index=min(1, len(PLOTS) - 1), key="dif_b")
                 f1 = ui.fig_plot_difference(df_esp, estilos, pa, pb, met_e, LANG, GAPS)
             if f1:
-                ui.show(st, f1, "fig_esp_cmp", estilos)
+                ui.show(st, f1, "fig_esp_cmp", estilos, barra=bar_e)
         elif escolha == "__side__":
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
-            ui.show(st, ui.fig_species_by_plot_panels(df_esp, estilos, met_e, tipo, valores, LANG, GAPS), "fig_esp_lado", estilos)
+            ui.show(st, ui.fig_species_by_plot_panels(df_esp, estilos, met_e, tipo, valores, LANG, GAPS), "fig_esp_lado", estilos, barra=bar_e)
         elif escolha == "__mean__":
             base_e = df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
         else:
             base_e = df_esp[df_esp["plot"] == escolha]
         fig_e = None if escolha in ("__side__", "__one__", "__diff__") else ui.fig_species_series(base_e, estilos, met_e, tipo, valores, LANG, GAPS)
         if fig_e:
-            ui.show(st, fig_e, "fig_esp_temp", estilos)
+            ui.show(st, fig_e, "fig_esp_temp", estilos, barra=bar_e)
         # the table below shows the same data as the chart, and says so
         cols_tab = list(ui.LIVE_DEAD_METRICS[met_e][:2]) if met_e in ui.LIVE_DEAD_METRICS else [met_e]
         if escolha == "__one__":
@@ -369,19 +381,28 @@ with tabs[1]:
                 piv = piv[sorted(piv.columns, key=lambda c: (str(c[1]), cols_tab.index(c[0])))]
                 piv.columns = [f"{ui.species_name(sp, LANG)} · {ui.label(m, LANG)}" for m, sp in piv.columns]
         piv.index.name = ui.label("year", LANG)
-        st.dataframe(piv.style.format(lambda v: ui.num(v, 2, LANG), na_rep="-"), width="stretch")
-        st.download_button(t("temporal.species_csv"),
-                           data=ui.for_display(df_esp, lang=LANG).to_csv(
-                               index=False).encode("utf-8"),
-                           file_name=t("file.series_by_species"), mime="text/csv")
+        st.dataframe(ui.estilo2(piv, LANG), width="stretch")
+        exportar.botoes(st, ui.for_display(df_esp, lang=LANG),
+                        t("file.series_by_species").rsplit(".", 1)[0], "exp_temp_sp", LANG,
+                        titulo=t("temporal.species_csv"))
 
 with tabs[2]:
     ui.report_section(t("temporal.tab.mortality"))
     st.subheader(t("temporal.mortality"))
-    GAPS = st.checkbox(t("temporal.gaps"), value=False, key="gaps_mort")
+    bar_mo = ui.barra(st)
+    GAPS = bar_mo.checkbox(t("temporal.gaps_short"), value=False, key="gaps_mort",
+                           help=t("temporal.gaps"))
+    _mort_ids = {"mortality_stems_pct": ui.label("mortality_stems_pct", LANG),
+                 "mortality_ba_pct": ui.label("mortality_ba_pct", LANG),
+                 "live_dead_density": ui.label("live_dead_density", LANG),
+                 "live_dead_ba": ui.label("live_dead_ba", LANG)}
+    comum_m = ui.ajustes_grupo(bar_mo, "mort", estilos, _mort_ids)
+    slot_m = bar_mo.container()
+    figs_m = {}
     ca, cb = st.columns(2)
-    ui.show(ca, ui.fig_series(df_serie, estilos, "mortality_stems_pct", VIEW, "line", LANG, GAPS), "3_6", estilos)
-    ui.show(cb, ui.fig_series(df_serie, estilos, "mortality_ba_pct", VIEW, "line", LANG, GAPS), "3_7", estilos)
+    for col_, y_ in ((ca, "mortality_stems_pct"), (cb, "mortality_ba_pct")):
+        figs_m[_mort_ids[y_]] = ui.show(col_, ui.fig_series(df_serie, estilos, y_, VIEW, "line", LANG, GAPS),
+                                        f"mort_{y_}", estilos, comum=comum_m, gid=y_)
     st.markdown("#### " + t("temporal.mortality_species"))
     base_m = (df_esp.drop(columns="plot").groupby(["year", "species"], as_index=False).mean(numeric_only=True)
               if MULTI else df_esp)
@@ -390,7 +411,9 @@ with tabs[2]:
         f_ = (ui.fig_species_by_plot_panels(df_esp, estilos, met_, "stack", False, LANG, GAPS)
               if MULTI else ui.fig_species_series(base_m, estilos, met_, "stack", False, LANG, GAPS))
         if f_:
-            ui.show(col_, f_, f"mort_{met_}", estilos)
+            figs_m[_mort_ids[met_]] = ui.show(col_, f_, f"mort_{met_}", estilos, comum=comum_m, gid=met_)
+    ui.tabelas_grupo(slot_m, "mort", figs_m, LANG)
+    st.divider()
     st.caption(t("temporal.no_dbh_note"))
     cols_nd = ["plot", "year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"] if MULTI else \
         ["year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"]
@@ -399,7 +422,7 @@ with tabs[2]:
 with tabs[3]:
     _tab = ui.for_display(df_serie if MULTI else df_serie.drop(columns="plot"), lang=LANG)
     _tab = _tab.set_index(([ui.label("plot", LANG)] if MULTI else []) + [ui.label("year", LANG)])
-    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
+    st.dataframe(ui.estilo2(_tab, LANG), width="stretch")
 
 with tabs[4]:
     ui.validation_panel(problemas, UNITS, key="mc_temp", lang=LANG)
@@ -423,25 +446,20 @@ with tabs[5]:
     sig = ("temp", tuple(PLOTS), tuple(df_serie["year"].tolist()), cfg_sig, LANG, show_seal)
     from manguetree import report as rep
     cc = st.columns(3)
+    cc[0].markdown("**" + t("export.pdf_title") + "**")
     ui.pdf_block(cc[0], "temp", lambda figs: rep.temporal_report(
         pdf_serie, pdf_esp, df_problemas, lang=LANG, seal=show_seal, figures=figs),
         t("file.temporal_pdf"), sig)
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as xls:
-        ui.for_display(df_serie, lang=LANG).to_excel(
-            xls, sheet_name=t("sheet.time_series"), index=False)
-        if df_esp is not None and not df_esp.empty:
-            ui.for_display(df_esp, lang=LANG).round(3).to_excel(
-                xls, sheet_name=t("sheet.by_species"), index=False)
-        df_problemas.to_excel(xls, sheet_name=t("sheet.issues"), index=False)
-    buf.seek(0)
+    _tabs = {t("sheet.time_series"): ui.for_display(df_serie, lang=LANG)}
+    if df_esp is not None and not df_esp.empty:
+        _tabs[t("sheet.by_species")] = ui.for_display(df_esp, lang=LANG)
+    _tabs[t("sheet.issues")] = df_problemas
     with cc[1]:
-        st.download_button(t("export.excel"), data=buf.getvalue(),
-                           file_name=t("file.temporal_xlsx"),
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        exportar.botoes(st, None, t("file.temporal_xlsx").rsplit(".", 1)[0], "exp_temp_all", LANG,
+                        tabelas=_tabs, titulo=t("export.all_tables"), lado_a_lado=False,
+                        nota=t("export.all_tables_note"))
     with cc[2]:
-        st.download_button(t("temporal.series_csv"),
-                           data=ui.for_display(df_serie, lang=LANG).to_csv(
-                               index=False).encode("utf-8"),
-                           file_name=t("file.series"), mime="text/csv")
+        exportar.botoes(st, ui.for_display(df_serie, lang=LANG),
+                        t("file.series").rsplit(".", 1)[0], "exp_temp_ser", LANG,
+                        titulo=t("temporal.series_csv"), lado_a_lado=False)
     st.caption(t("export.temporal_note"))

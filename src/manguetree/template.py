@@ -72,6 +72,12 @@ def excel_bytes(lang):
     return buf.getvalue()
 
 
+def txt_bytes(lang):
+    """Template as text separated by tabs (decimal mark of the language)."""
+    dec = "," if lang == "pt" else "."
+    return data_frame(lang).to_csv(index=False, sep="\t", decimal=dec).encode("utf-8-sig")
+
+
 def csv_bytes(lang):
     sep = ";" if lang == "pt" else ","
     dec = "," if lang == "pt" else "."

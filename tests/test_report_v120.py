@@ -142,8 +142,10 @@ def test_slots_match_the_spec_table():
 
 
 def test_pt_br_number_format():
-    assert formatting.fmt_br(12500.5, 1) == "12.500,5"
-    assert formatting.fmt_br(12500.5, 1, "en") == "12,500.5"
+    # results always show two decimals; counts (0 decimals) of whole numbers stay whole
+    assert formatting.fmt_br(12500.5, 1) == "12.500,50"
+    assert formatting.fmt_br(12500.5, 1, "en") == "12,500.50"
+    assert formatting.fmt_br(12500.4, 0) == "12.500,40" and formatting.fmt_br(12500.0, 0) == "12.500"
     assert formatting.plotly_separators("pt") == ",." and formatting.plotly_separators("en") == ".,"
 
 

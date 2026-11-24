@@ -11,3 +11,7 @@ dist/
 
 # mkdocs build
 site/
+
+# temporary files
+tests/_tmp_report.pdf
+mensagem_commit.txt

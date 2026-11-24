@@ -28,13 +28,14 @@ import streamlit as st
 from manguetree import charts as ui
 from manguetree import colonizacao as col
 from manguetree import colonizacao_charts as cc
+from manguetree import exportar
 from manguetree import i18n
 from manguetree.i18n import t
 
 st.set_page_config(layout="wide", page_title=t("colon.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
-ui.sidebar_nav(st.sidebar, tab_icons=("verificacao", "dinamica", "altura", "evolucao", "exportar"),
-               subtab_icons=("densidade", "idade_parcela", "altura", "coorte", "curva_jimenez"))
+ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "verificacao", "exportar"),
+               subtab_icons=("densidade", "altura", "idade_parcela", "dinamica", "coorte", "curva_jimenez"))
 if not ui.colonizacao_enabled():                 # preview page: hidden unless switched on
     st.info(t("colon.disabled"))
     st.stop()
@@ -90,9 +91,19 @@ def _tabelas_limpas(_parcelas, sig):
     return col.tabela_limpa(_parcelas, "longo"), col.tabela_limpa(_parcelas, "largo")
 
 
+def _limpa_na_unidade(df):
+    """Height columns of the clean tables ("altura_cm", "2005 altura_cm") in the chosen unit."""
+    cols = [c for c in df.columns if str(c).endswith("altura_cm")]
+    if not cols or UH == "cm":
+        return df
+    out = df.copy()
+    out[cols] = out[cols].astype(float) * ui._un.fator_cm(UH)
+    return out.rename(columns={c: str(c).replace("altura_cm", f"altura_{UH}") for c in cols})
+
+
 @st.cache_data(show_spinner=False)
-def _csv(_df, chave):
-    return _df.to_csv(index=False).encode("utf-8")
+def _bytes_tab(_df, chave, formato, lang):
+    return exportar.bytes_tabela(_df, formato, lang)
 
 
 def _classe(cl):
@@ -156,6 +167,46 @@ def _nota_juncao():
 VERSAO = st.radio(t("colon.cfg.version"), ("sem", "com"), key="colon_versao", horizontal=True,
                   format_func=_versao)
 COM_SEM_COORTE = VERSAO == "com"
+# joined plots: a year with data of only part of the plots can be hidden (live control)
+OCULTAR = bool(CFG and UNIDAS and st.checkbox(
+    t("colon.cfg.hide_incomplete"), key="colon_ocultar", help=t("colon.cfg.hide_incomplete_help")))
+
+
+def _aviso_incompletas(df):
+    """Says which years of a joined plot hold data of only part of its plots."""
+    for uniao, grupos in col.lista_incompletas(df).items():
+        for membros, anos in grupos.items():
+            st.caption(t("colon.warn.incomplete", union=uniao, years=", ".join(map(str, anos)),
+                         plots=membros.replace("+", " + ")))
+
+
+UH = ui.altura_unidade()                       # unit of the heights shown (m or cm)
+COLS_ALT = ("media", "dp", "minimo", "maximo")
+
+
+def _na_unidade(df, cols=COLS_ALT):
+    """Heights of the colonization tables are typed and calculated in cm: shown in ``UH``."""
+    cols = [c for c in cols if c in df.columns]
+    if not cols or UH == "cm":
+        return df
+    out = df.copy()
+    out[cols] = out[cols].astype(float) * ui._un.fator_cm(UH)
+    return out
+
+
+def _selecao_altura():
+    """Collections the user picked by hand ({(plot, year): (block, column)}), kept in the widget
+    state of the picker in the height tab; a year not picked follows the automatic rule."""
+    sel = {}
+    for k, v in st.session_state.items():
+        if isinstance(k, str) and k.startswith("colon_sel|") and isinstance(v, tuple):
+            _, parc, ano = k.split("|")
+            sel[(parc, int(ano))] = v
+    return sel
+
+
+def _modo_altura():
+    return st.session_state.get("colon_modo_altura", "mais_dados")
 
 
 def _altura(pref):
@@ -170,15 +221,48 @@ def _altura(pref):
     h2, h3 = st.columns(2)
     por_esp = h2.checkbox(t("colon.density.by_species"), key=f"{pref}_especie")
     um_m = h3.checkbox(t("colon.height.one_m"), key=f"{pref}_1m")
-    return col.estatistica_altura(
+    return _na_unidade(col.estatistica_altura(
         parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS, por_especie=por_esp,
         minimo_cm=col.ALTURA_1M_CM if um_m else None, classes=classes or ("jovem",),
-        por_classe=por_classe and len(classes) > 1)
+        por_classe=por_classe and len(classes) > 1, ocultar_incompletas=OCULTAR,
+        selecao=_selecao_altura(), modo=_modo_altura()))
 
 
-tab_verif, tab_dens, tab_alt, tab_graf, tab_exp = st.tabs([
-    t("colon.tab.verify"), t("colon.tab.density"), t("colon.tab.height"), t("colon.tab.charts"),
-    t("colon.tab.export")])
+def _painel_coletas():
+    """Mean, SD and N of every collection of the years that have more than one, and the choice of
+    the one that goes to the statistics and charts (automatic unless picked)."""
+    classes = st.session_state.get("colon_h_classes") or ["jovem"]
+    tc = col.tabela_alturas_coletas(
+        parcelas, incluir_sem_coorte=COM_SEM_COORTE, classes=classes,
+        selecao=_selecao_altura(), modo=_modo_altura(),
+        minimo_cm=col.ALTURA_1M_CM if st.session_state.get("colon_h_1m") else None)
+    multi = _na_unidade(tc[tc["varias"]] if not tc.empty else tc)
+    if multi.empty:
+        return
+    with st.expander(t("colon.height.collections"), expanded=False):
+        st.caption(t("colon.height.collections_help"))
+        nomes = {"parcela": t("colon.col.plot"), "ano": t("colon.col.year"),
+                 "coleta": t("colon.height.collection"), "data": t("colon.height.date"),
+                 "coluna": t("colon.col.height_column"), "n": "N",
+                 "media": t("colon.height.mean", u=UH), "dp": t("colon.height.sd", u=UH),
+                 "minimo": t("colon.height.min", u=UH), "maximo": t("colon.height.max", u=UH),
+                 "usada": t("colon.height.used")}
+        vista = multi.drop(columns=["bloco", "varias", "chave"]).rename(columns=nomes)
+        vista[nomes["usada"]] = vista[nomes["usada"]].map(lambda u: "●" if u else "")
+        st.dataframe(ui.estilo2(vista, LANG), hide_index=True, width="stretch")
+        exportar.botoes(st, multi.drop(columns=["varias", "chave"]), "altura_coletas",
+                        "exp_colon_coletas", LANG, titulo=t("colon.height.collections"))
+        for (parc, ano), g in multi.groupby(["parcela", "ano"]):
+            opcoes = ["auto"] + list(g["chave"])
+            rot = {c: f"{r.coleta} (col. {r.coluna}, N={r.n})"
+                   for c, r in zip(g["chave"], g.itertuples())}
+            st.selectbox(f"{parc} {ano}", opcoes, key=f"colon_sel|{parc}|{ano}",
+                         format_func=lambda c, rot=rot: t("colon.height.auto")
+                         if c == "auto" else rot[c])
+
+
+tab_graf, tab_verif, tab_exp = st.tabs([
+    t("colon.tab.charts"), t("colon.tab.verify"), t("colon.tab.export")])
 rel = est = None
 
 # ------------------------------------------------------------------ verification
@@ -306,7 +390,7 @@ with tab_verif:
                 st.dataframe(pd.DataFrame({
                     t("colon.col.year"): alt["ano"], t("colon.col.j_lines"): alt["linhas_j"],
                     t("colon.col.no_height"): alt["sem_altura"],
-                    t("colon.col.max_height"): alt["altura_maxima"],
+                    t("colon.col.max_height", u=UH): alt["altura_maxima"] * ui._un.fator_cm(UH),
                     t("colon.col.suspect"): alt["suspeitas"],
                 }), hide_index=True, width="stretch")
                 st.caption(t("colon.verify.alerts_note"))
@@ -333,151 +417,225 @@ with tab_verif:
                 for tipo, msg, _ in p.avisos:
                     st.warning(f"{tipo}: {msg}")
 
-# ------------------------------------------------------------------ density
-with tab_dens:
-    if not CFG:
-        _precisa_rodar()
-    else:
-        st.write(t("colon.density.intro"))
-        _nota_juncao()
-        por_especie = st.checkbox(t("colon.density.by_species"), key="colon_especie")
-        dens = col.densidade_jovens(parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS,
-                                    areas=AREAS, por_especie=por_especie)
-        if dens.empty:
-            st.info(t("colon.density.empty"))
-        else:
-            dens["serie"] = (dens["parcela"] + " " + dens["especie"]) if por_especie \
-                else dens["parcela"]
-            st.subheader(t("colon.density.table"))
-            tabela = dens.pivot_table(index="ano", columns="serie", values="ind_ha",
-                                      aggfunc="first")
-            st.dataframe(tabela.round(1), width="stretch")
-            st.subheader(t("colon.density.counts"))
-            st.dataframe(dens.pivot_table(index="ano", columns="serie", values="n",
-                                          aggfunc="first"), width="stretch")
-            st.caption(t("colon.density.note"))
-            st.download_button(t("colon.density.download"),
-                               dens.drop(columns=["serie"]).to_csv(index=False).encode("utf-8"),
-                               file_name="densidade_jovens.csv", mime="text/csv")
-            rel = col.densidade_relativa(parcelas, incluir_sem_coorte=COM_SEM_COORTE,
-                                         unidas=UNIDAS, areas=AREAS)
-            st.subheader(t("colon.density.relative"))
-            st.dataframe(rel.assign(serie=rel["parcela"] + " " + rel["especie"]).pivot_table(
-                index="ano", columns="serie", values="relativa", aggfunc="first").round(1),
-                width="stretch")
-            st.caption(t("colon.density.relative_note"))
-
-# ------------------------------------------------------------------ height
-with tab_alt:
-    if not CFG:
-        _precisa_rodar()
-    else:
-        st.write(t("colon.height.intro"))
-        _nota_juncao()
-        est = _altura("colon_h")
-        if est.empty:
-            st.info(t("colon.height.empty"))
-        else:
-            nomes = {"parcela": t("colon.col.plot"), "ano": t("colon.col.year"),
-                     "especie": t("colon.col.species"), "classe": t("colon.col.class"),
-                     "n": "N", "media": t("colon.height.mean"), "dp": t("colon.height.sd"),
-                     "minimo": t("colon.height.min"), "maximo": t("colon.height.max")}
-            vista = est.copy()
-            if "classe" in vista:
-                vista["classe"] = vista["classe"].map(lambda c: t(f"colon.cls.{c}"))
-            st.dataframe(vista.rename(columns=nomes).round(1), hide_index=True, width="stretch")
-            st.caption(t("colon.height.note"))
-            st.download_button(t("colon.density.download"), est.to_csv(index=False).encode("utf-8"),
-                               file_name="altura.csv", mime="text/csv", key="colon_h_dl")
-
 # ------------------------------------------------------------------ charts
 with tab_graf:
     if not CFG:
         _precisa_rodar()
     else:
         _nota_juncao()
-        g_dens_t, g_idade_t, g_alt_t, g_coorte_t, g_jim_t = st.tabs([
-            t("colon.gtab.density"), t("colon.gtab.age"), t("colon.gtab.height"),
-            t("colon.gtab.cohort"), t("colon.gtab.jimenez")])
+        g_dens_t, g_alt_t, g_idade_t, g_cruz_t, g_coorte_t, g_jim_t = st.tabs([
+            t("colon.gtab.density"), t("colon.gtab.height"), t("colon.gtab.age"),
+            t("colon.gtab.cross"), t("colon.gtab.cohort"), t("colon.gtab.jimenez")])
         d_all = col.densidade_jovens(parcelas, incluir_sem_coorte=COM_SEM_COORTE,
-                                     unidas=UNIDAS, areas=AREAS)
+                                     unidas=UNIDAS, areas=AREAS, ocultar_incompletas=OCULTAR)
 
-        # --- density: curve per plot and species composition
+        # --- density: curve per plot, species composition, then the tables
         with g_dens_t:
             ui.report_section(t("colon.gtab.density"))
             if d_all.empty:
                 st.info(t("colon.density.empty"))
             else:
-                g1, g2 = st.columns(2)
-                g_log = g1.checkbox(t("colon.chart.log"), key="colon_g_log")
                 series = sorted(d_all["parcela"].unique())
-                escolha = g2.multiselect(t("colon.chart.plots"), series, default=series,
-                                         key="colon_g_pl")
+                bar = ui.barra(st)
+                escolha = bar.multiselect(t("colon.chart.plots"), series, default=series,
+                                          key="colon_g_pl")
+                tipo_d = bar.selectbox(t("temporal.chart"), ("line", "markers", "bar", "hbar"),
+                                       key="colon_dens_tipo", width=200,
+                                       format_func=lambda k: t(f"temporal.chart.{k}"))
+                g_log = bar.checkbox(t("colon.chart.log"), key="colon_g_log")
                 g_dens = d_all[d_all["parcela"].isin(escolha)]
                 if g_dens.empty:
                     st.info(t("colon.density.empty"))
                 else:
-                    ui.show(st, cc.fig_curva_densidade(g_dens, estilos, LANG, g_log),
-                            "colon_dens", estilos)
-                st.divider()
+                    ui.show(st, cc.fig_curva_densidade(g_dens, estilos, LANG, g_log, tipo_d),
+                            "colon_dens", estilos, barra=bar)
+                    _aviso_incompletas(g_dens)
                 g_rel = col.densidade_relativa(parcelas, incluir_sem_coorte=COM_SEM_COORTE,
-                                               unidas=UNIDAS, areas=AREAS)
+                                               unidas=UNIDAS, areas=AREAS,
+                                               ocultar_incompletas=OCULTAR)
                 if g_rel.empty:
                     st.info(t("colon.density.empty"))
                 else:
-                    s1, s2 = st.columns(2)
-                    plot_g = s1.selectbox(t("colon.chart.plot"), sorted(g_rel["parcela"].unique()),
-                                          key="colon_g_plot")
-                    g_pct = s2.radio(t("colon.chart.metric"), ("relative", "density"),
-                                     horizontal=True, key="colon_g_metric",
-                                     format_func=lambda k: t(f"colon.chart.metric_{k}")) == "relative"
+                    st.divider()
+                    bar2 = ui.barra(st)
+                    plot_g = bar2.selectbox(t("colon.chart.plot"), sorted(g_rel["parcela"].unique()),
+                                            key="colon_g_plot", width=220)
+                    g_pct = bar2.selectbox(t("colon.chart.metric"), ("relative", "density"),
+                                           key="colon_g_metric", width=240,
+                                           format_func=lambda k: t(f"colon.chart.metric_{k}")) == "relative"
                     ui.show(st, cc.fig_composicao(g_rel, estilos, plot_g, g_pct, LANG),
-                            "colon_esp", estilos)
+                            "colon_esp", estilos, barra=bar2)
                 st.caption(t("colon.chart.reference_note"))
+                st.divider()
+                st.write(t("colon.density.intro"))
+                por_especie = st.checkbox(t("colon.density.by_species"), key="colon_especie")
+                dens = col.densidade_jovens(parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS,
+                                            areas=AREAS, por_especie=por_especie,
+                                            ocultar_incompletas=OCULTAR)
+                if not dens.empty:
+                    dens["serie"] = (dens["parcela"] + " " + dens["especie"]) if por_especie \
+                        else dens["parcela"]
+                    st.subheader(t("colon.density.table"))
+                    tabela = dens.pivot_table(index="ano", columns="serie", values="ind_ha",
+                                              aggfunc="first")
+                    st.dataframe(ui.estilo2(tabela, LANG), width="stretch")
+                    st.subheader(t("colon.density.counts"))
+                    st.dataframe(dens.pivot_table(index="ano", columns="serie", values="n",
+                                                  aggfunc="first"), width="stretch")
+                    st.caption(t("colon.density.note"))
+                    _aviso_incompletas(dens)
+                    exportar.botoes(st, dens.drop(columns=["serie"]), "densidade_jovens", "exp_colon_dens",
+                                    LANG, titulo=t("colon.density.download"))
+                    rel = col.densidade_relativa(parcelas, incluir_sem_coorte=COM_SEM_COORTE,
+                                                 unidas=UNIDAS, areas=AREAS,
+                                                 ocultar_incompletas=OCULTAR)
+                    st.subheader(t("colon.density.relative"))
+                    st.dataframe(ui.estilo2(rel.assign(serie=rel["parcela"] + " " + rel["especie"]).pivot_table(
+                        index="ano", columns="serie", values="relativa", aggfunc="first"), LANG),
+                        width="stretch")
+                    st.caption(t("colon.density.relative_note"))
 
-        # --- age: log-linear fit
+        # --- height: chart first, then the table of the collections used
+        with g_alt_t:
+            ui.report_section(t("colon.gtab.height"))
+            bar = ui.barra(st)
+            bar.selectbox(t("colon.height.mode"), ["mais_dados", "ultima"], key="colon_modo_altura",
+                          width=300, format_func=lambda m: t(f"colon.height.mode_{m}"),
+                          help=t("colon.height.mode_help"))
+            tipo_a = bar.selectbox(t("temporal.chart"), ui.SERIES_CHARTS, index=4, key="colon_alt_tipo",
+                                   width=250, format_func=lambda k: t(f"temporal.chart.{k}"))
+            est = _altura("colon_h")
+            if est.empty:
+                st.info(t("colon.height.empty"))
+            else:
+                st.caption(t("colon.chart.height_note"))
+                ui.show(st, cc.fig_altura(est, estilos, LANG, tipo_a), "colon_alt", estilos, barra=bar)
+                _aviso_incompletas(est)
+                _painel_coletas()
+                nomes = {"parcela": t("colon.col.plot"), "ano": t("colon.col.year"),
+                         "especie": t("colon.col.species"), "classe": t("colon.col.class"),
+                         "n": "N", "media": t("colon.height.mean", u=UH), "dp": t("colon.height.sd", u=UH),
+                         "minimo": t("colon.height.min", u=UH), "maximo": t("colon.height.max", u=UH)}
+                vista = est.copy()
+                if "classe" in vista:
+                    vista["classe"] = vista["classe"].map(lambda c: t(f"colon.cls.{c}"))
+                st.dataframe(ui.estilo2(vista.rename(columns=nomes), LANG), hide_index=True,
+                             width="stretch")
+                st.caption(t("colon.height.note"))
+                exportar.botoes(st, est, "altura", "exp_colon_alt", LANG,
+                                titulo=t("colon.density.download"))
+
+        # --- age: density against plot age (square axes, 0 to 10 years), optional fitted curve
         with g_idade_t:
             ui.report_section(t("colon.gtab.age"))
             if d_all.empty:
                 st.info(t("colon.density.empty"))
             else:
-                st.caption(t("colon.chart.start_hint"))
                 series_r = sorted(d_all["parcela"].unique())
                 inicio = {}
-                caixas = st.columns(5)
-                for i_q, q in enumerate(series_r):
-                    inicio[q] = caixas[i_q % 5].number_input(
-                        t("colon.chart.start_year", plot=q), min_value=0, max_value=2100,
-                        value=col.ano_estabelecimento(q), step=1, key=f"colon_inicio_{q}")
+                with st.expander(t("colon.chart.start_title")):
+                    st.caption(t("colon.chart.start_hint"))
+                    caixas = st.columns(5)
+                    for i_q, q in enumerate(series_r):
+                        inicio[q] = caixas[i_q % 5].number_input(
+                            t("colon.chart.start_year", plot=q), min_value=0, max_value=2100,
+                            value=col.ano_estabelecimento(q), step=1, key=f"colon_inicio_{q}")
                 r_df = col.com_idade(d_all, inicio)
-                modo_r = st.radio(t("colon.chart.fit_mode"), ("all", "plot"), horizontal=True,
-                                  key="colon_fit_modo",
-                                  format_func=lambda k: t(f"colon.chart.fit_mode_{k}"))
-                regs = ({"": col.regressao_log_linear(r_df)} if modo_r == "all" else
-                        {q: col.regressao_log_linear(r_df[r_df["parcela"] == q])
-                         for q in sorted(r_df["parcela"].unique())})
-                regs = {k: v for k, v in regs.items() if v}
-                if not regs:
+                bar = ui.barra(st)
+                tipo_i = bar.selectbox(t("temporal.chart"), ("markers", "line", "bar", "hbar"),
+                                       key="colon_idade_tipo", width=220,
+                                       format_func=lambda k: t(f"temporal.chart.{k}"))
+                log_i = bar.selectbox(t("colon.chart.y_scale"), ("linear", "log"), key="colon_idade_escala",
+                                      width=130, format_func=lambda k: t(f"colon.chart.scale_{k}")) == "log"
+                if r_df[(r_df["idade"] > 0) & (r_df["ind_ha"] > 0)].empty:
                     st.info(t("colon.chart.regression_need"))
                 else:
-                    ui.show(st, cc.fig_regressao(r_df, regs, estilos, LANG), "colon_reg", estilos)
-                    for rotulo, r in regs.items():
-                        st.caption(t("colon.chart.regression_equation",
-                                     label=(f"{rotulo}: " if rotulo else ""),
-                                     a=ui.num(r["a"], 3, LANG), b=ui.num(r["b"], 3, LANG),
-                                     se=ui.num(r["ep_b"], 3, LANG), r2=ui.num(r["r2"], 3, LANG),
-                                     n=r["n"]))
-                    st.caption(t("colon.chart.regression_note"))
+                    c_graf, c_dir = st.columns([3, 2], gap="medium")
+                    # fitted curve: its switch, the fit and the equations sit to the right of the chart
+                    curva = c_dir.checkbox(t("colon.chart.show_fit"), value=True, key="colon_idade_curva")
+                    modo_r = c_dir.selectbox(t("colon.chart.fit_mode"), ("all", "plot"), key="colon_fit_modo",
+                                             disabled=not curva,
+                                             format_func=lambda k: t(f"colon.chart.fit_mode_{k}"))
+                    regs = ({"": col.regressao_log_linear(r_df)} if modo_r == "all" else
+                            {q: col.regressao_log_linear(r_df[r_df["parcela"] == q])
+                             for q in sorted(r_df["parcela"].unique())})
+                    regs = {k: v for k, v in regs.items() if v}
+                    larg, alt_ = cc.TAMANHO_IDADE
+                    ui.show(c_graf, cc.fig_idade(r_df, regs, estilos, LANG, tipo_i, log_i, curva),
+                            "colon_reg", {**estilos, "width": larg, "height": alt_}, barra=bar)
+                    with c_dir:
+                        _aviso_incompletas(r_df)
+                        if curva and not regs:
+                            st.info(t("colon.chart.regression_need"))
+                        for rotulo, r in (regs.items() if curva else ()):
+                            st.caption(t("colon.chart.regression_equation",
+                                         label=(f"{rotulo}: " if rotulo else ""),
+                                         a=ui.num(r["a"], 3, LANG), b=ui.num(r["b"], 3, LANG),
+                                         c=ui.num(float(__import__("math").exp(r["a"])), 1, LANG),
+                                         se=ui.num(r["ep_b"], 3, LANG), r2=ui.num(r["r2"], 3, LANG),
+                                         n=r["n"]))
+                        if curva:
+                            st.caption(t("colon.chart.regression_note"))
 
-        # --- height
-        with g_alt_t:
-            ui.report_section(t("colon.gtab.height"))
-            est_g = _altura("colon_gh")
-            if est_g.empty:
-                st.info(t("colon.height.empty"))
+        # --- height crossed with density: lines over the years or scatter plot with equation
+        with g_cruz_t:
+            ui.report_section(t("colon.gtab.cross"))
+            st.write(t("colon.cross.intro"))
+            alt_c = _na_unidade(col.estatistica_altura(
+                parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS,
+                ocultar_incompletas=OCULTAR, selecao=_selecao_altura(), modo=_modo_altura()))
+            cruz = col.cruzar_altura_densidade(d_all, alt_c)
+            if cruz.empty:
+                st.info(t("colon.cross.need"))
             else:
-                st.caption(t("colon.chart.height_note"))
-                ui.show(st, cc.fig_altura(est_g, estilos, LANG), "colon_alt", estilos)
+                series_c = sorted(cruz["parcela"].unique())
+                bar = ui.barra(st)
+                forma = bar.selectbox(t("colon.cross.mode"), ("line", "xy"), key="colon_cruz_modo",
+                                      width=200, format_func=lambda k: t(f"colon.cross.mode_{k}"))
+                eixo_x = bar.selectbox(t("colon.cross.x_axis"), ("altura", "densidade"),
+                                       key="colon_cruz_x", width=150, disabled=forma == "line",
+                                       format_func=lambda k: t(f"colon.cross.x_{k}"))
+                esc_c = bar.multiselect(t("colon.chart.plots"), series_c, default=series_c,
+                                        key="colon_cruz_pl")
+                c_log = bar.checkbox(t("colon.chart.log"), key="colon_cruz_log")
+                cruz_g = cruz[cruz["parcela"].isin(esc_c)]
+                if cruz_g.empty:
+                    st.info(t("colon.cross.need"))
+                else:
+                    fig_c = (cc.fig_cruzamento_linha(cruz_g, estilos, LANG, c_log) if forma == "line"
+                             else cc.fig_cruzamento_xy(cruz_g, estilos, LANG, eixo_x, c_log))
+                    ui.show(st, fig_c, "colon_cruz", estilos, barra=bar)
+                    _aviso_incompletas(cruz_g)
+                    nx, ny = ((t("colon.cross.x_altura").lower(), t("colon.cross.x_densidade").lower())
+                              if eixo_x == "altura" else
+                              (t("colon.cross.x_densidade").lower(), t("colon.cross.x_altura").lower()))
+                    for q, sub in cruz_g.groupby("parcela"):
+                        xs, ys = ((sub["altura"], sub["ind_ha"]) if eixo_x == "altura"
+                                  else (sub["ind_ha"], sub["altura"]))
+                        r = col.regressao_linear(xs, ys)
+                        if r is None:
+                            continue
+                        if forma == "line":
+                            st.caption(t("colon.cross.corr", plot=q, r=ui.num(r["r"], 2, LANG), n=r["n"]))
+                        else:
+                            p_txt = "< 0,001" if r["p"] < 0.001 and LANG == "pt" else \
+                                "< 0.001" if r["p"] < 0.001 else ui.num(r["p"], 3, LANG)
+                            st.markdown(t("colon.cross.equation", plot=q, y=ny, x=nx,
+                                          a=ui.num(r["a"], 3, LANG),
+                                          sinal="+" if r["b"] >= 0 else "-",
+                                          b=ui.num(abs(r["b"]), 3, LANG), r=ui.num(r["r"], 3, LANG),
+                                          p=p_txt, r2=ui.num(r["r2"], 3, LANG), n=r["n"]))
+                    st.caption(t("colon.cross.note"))
+                    nomes_c = {"parcela": t("colon.col.plot"), "ano": t("colon.col.year"),
+                               "ind_ha": t("colon.chart.density_axis"),
+                               "altura": t("colon.height.mean", u=UH),
+                               "dp": t("colon.height.sd", u=UH), "n_altura": "N",
+                               "membros": t("colon.col.members"),
+                               "incompleta": t("colon.col.incomplete")}
+                    st.dataframe(ui.estilo2(cruz_g.rename(columns=nomes_c), LANG),
+                                 hide_index=True, width="stretch")
+                    exportar.botoes(st, cruz_g, "cruzamento_altura_densidade", "exp_colon_cruz",
+                                    LANG, titulo=t("colon.gtab.cross"))
 
         # --- count by year, stacked by cohort, species or item
         with g_coorte_t:
@@ -486,55 +644,76 @@ with tab_graf:
             codigos_ach = sorted({c for p in parcelas for c in p.codigos})
             classes_ach = sorted({col.classifica(c, p.classes_manuais) for p in parcelas
                                   for c in p.codigos} - {"vazio"})
-            k1, k2, k3 = st.columns(3)
-            por = k1.radio(t("colon.count.by"), ("classe", "codigo"), horizontal=True,
-                           key="colon_ct_por", format_func=lambda k: t(f"colon.count.by_{k}"))
+            bar1 = ui.barra(st)
+            por = bar1.selectbox(t("colon.count.by"), ("classe", "codigo"), key="colon_ct_por",
+                                 width=150, format_func=lambda k: t(f"colon.count.by_{k}"))
             if por == "classe":
                 opcoes = classes_ach
                 padrao = [c for c in ("jovem",) if c in opcoes]
                 fmt = lambda c: t(f"colon.cls.{c}")
             else:
                 opcoes, padrao, fmt = codigos_ach, [c for c in ("J",) if c in codigos_ach], str
-            itens = k2.multiselect(t("colon.count.items"), opcoes, default=padrao,
-                                   key=f"colon_ct_itens_{por}", format_func=fmt)
-            empilha = k3.radio(t("colon.count.stack"), ("coorte", "especie", "item", "nenhum"),
-                               horizontal=True, key="colon_ct_pilha",
-                               format_func=lambda k: t(f"colon.count.stack_{k}"))
+            itens = bar1.multiselect(t("colon.count.items"), opcoes, default=padrao,
+                                     key=f"colon_ct_itens_{por}", format_func=fmt)
+            empilha = bar1.selectbox(t("colon.count.stack"), ("coorte", "especie", "item", "nenhum"),
+                                     key="colon_ct_pilha", width=200,
+                                     format_func=lambda k: t(f"colon.count.stack_{k}"))
             agrupar = por if empilha == "item" else empilha
             cont = col.contagem_por_ano(parcelas, itens, por=por, agrupar=agrupar, unidas=UNIDAS)
             if cont.empty:
                 st.info(t("colon.count.empty"))
             else:
-                m1, m2 = st.columns(2)
-                alvo = m1.selectbox(t("colon.count.plot"), ["__todas__"] + sorted(cont["parcela"].unique()),
-                                    key="colon_ct_parcela",
-                                    format_func=lambda v: t("colon.count.all_plots") if v == "__todas__" else v)
-                pct = m2.checkbox(t("colon.count.percent"), key="colon_ct_pct")
+                bar2 = ui.barra(st)
+                alvo = bar2.selectbox(t("colon.count.plot"), ["__todas__"] + sorted(cont["parcela"].unique()),
+                                      key="colon_ct_parcela", width=200,
+                                      format_func=lambda v: t("colon.count.all_plots") if v == "__todas__" else v)
+                pct = bar2.checkbox(t("colon.count.percent"), key="colon_ct_pct")
                 vista = cont if alvo == "__todas__" else cont[cont["parcela"] == alvo]
-                ui.show(st, cc.fig_contagem(vista, estilos, LANG, agrupar, pct), "colon_cont",
-                        estilos)
+                grupos_v = cc.grupos_contagem(vista, agrupar)
+                padrao_c = cc.cores_contagem(grupos_v, agrupar, estilos)
+                cores_u = {}
+                with bar2.popover(t("colon.count.colors"), icon=":material/palette:") as pop_c:
+                    modo_c = pop_c.selectbox(t("colon.count.colors_mode"),
+                                             ("padrao", "paleta", "gradiente", "cada"),
+                                             key="colon_ct_cor_modo",
+                                             format_func=lambda k: t(f"colon.count.colors_{k}"))
+                    if modo_c == "paleta":
+                        pal = pop_c.selectbox(t("colon.count.colors_palette"), list(ui.PALETAS),
+                                              key="colon_ct_cor_pal",
+                                              format_func=lambda c: t(f"palette.{c}"))
+                        cores_u = {g: ui.PALETAS[pal][i % len(ui.PALETAS[pal])]
+                                   for i, g in enumerate(grupos_v)}
+                    elif modo_c == "gradiente":
+                        base = pop_c.color_picker(t("colon.count.colors_base"), "#2A9D8F",
+                                                  key="colon_ct_cor_base")
+                        cores_u = cc.gradiente(base, grupos_v)
+                    elif modo_c == "cada":
+                        for g in grupos_v:
+                            cores_u[g] = pop_c.color_picker(
+                                cc.nome_grupo(g, agrupar, LANG), cc.hex_cor(padrao_c[g]),
+                                key=f"colon_ct_cor_{agrupar}_{g}")
+                ui.show(st, cc.fig_contagem(vista, estilos, LANG, agrupar, pct, cores_u or None),
+                        "colon_cont", estilos, barra=bar2)
                 st.caption(t("colon.count.note"))
                 tab_c = vista.groupby(["ano", "grupo"])["n"].sum().unstack(fill_value=0)
                 st.dataframe(tab_c, width="stretch")
-                st.download_button(t("colon.density.download"),
-                                   vista.to_csv(index=False).encode("utf-8"),
-                                   file_name="contagem_por_ano.csv", mime="text/csv",
-                                   key="colon_ct_dl")
+                exportar.botoes(st, vista, "contagem_por_ano", "exp_colon_cont", LANG,
+                                titulo=t("colon.density.download"))
 
-        # --- Jimenez schematic next to the observed density
+        # --- Jimenez schematic next to the observed density (same size)
         with g_jim_t:
             ui.report_section(t("colon.gtab.jimenez"))
-            st.caption(t("colon.chart.schema_note"))
             s1, s2 = st.columns(2)
+            f_esq = cc.fig_esquema(estilos, LANG)
+            f_dir = None if d_all.empty else cc.fig_curva_densidade(d_all, estilos, LANG)
+            cc.alinhar(*(f for f in (f_esq, f_dir) if f is not None))     # axes at the same heights
             with s1:
-                ui.show(st, cc.fig_esquema(estilos, LANG), "colon_schema", estilos)
+                ui.show(st, f_esq, "colon_schema", estilos, botoes=False)
             with s2:
-                if d_all.empty:
+                if f_dir is None:
                     st.info(t("colon.density.empty"))
                 else:
-                    ui.show(st, cc.fig_curva_densidade(d_all, estilos, LANG),
-                            "colon_schema_obs", estilos)
-            st.caption(t("colon.chart.reference_note"))
+                    ui.show(st, f_dir, "colon_schema_obs", estilos, botoes=False)
 
 # ------------------------------------------------------------------ export
 with tab_exp:
@@ -545,6 +724,7 @@ with tab_exp:
     so_usadas = e2.checkbox(t("colon.export.only_used"), value=False, key="colon_usadas",
                             disabled=formato == "largo")
     longo, largo = _tabelas_limpas(parcelas, _SIG)
+    longo, largo = _limpa_na_unidade(longo), _limpa_na_unidade(largo)
     mostrado = largo if formato == "largo" else (
         longo[longo["usada_na_analise"]] if so_usadas else longo)
     st.subheader(t("colon.export.preview", n=len(mostrado)))
@@ -557,22 +737,24 @@ with tab_exp:
     if CFG:
         ui.pdf_block(st, "colon", lambda figs: rep.colonization_report(
             [col.resumo(p) for p in parcelas],
-            col.densidade_jovens(parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS, areas=AREAS),
+            col.densidade_jovens(parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS, areas=AREAS,
+                                 ocultar_incompletas=OCULTAR),
             lang=LANG, figures=figs),
-            "MangueTREE_colonizacao.pdf", (_SIG, COM_SEM_COORTE, LANG))
+            "MangueTREE_colonizacao.pdf", (_SIG, COM_SEM_COORTE, LANG, OCULTAR))
     d1, d2 = st.columns(2)
-    d1.download_button(t("colon.export.csv"), _csv(mostrado, (_SIG, formato, so_usadas)),
-                       file_name=f"colonizacao_{formato}.csv", mime="text/csv", key="colon_csv")
+    _fmt = d1.radio(t("export.format_choice"), ("csv", "txt"), horizontal=True, key="colon_fmt",
+                    format_func=lambda f: t(f"export.fmt_{f}"))
+    d1.download_button(t("colon.export.csv"), _bytes_tab(mostrado, (_SIG, formato, so_usadas, UH), _fmt, LANG),
+                       file_name=f"colonizacao_{formato}.{_fmt}", mime=exportar.MIME[_fmt],
+                       key="colon_csv")
     # the Excel file is big: it is built only when asked for
     if d2.button(t("colon.export.prepare_xlsx"), key="colon_xlsx_prep"):
         _buf = io.BytesIO()
         with st.spinner(t("colon.export.preparing")):
-            with pd.ExcelWriter(_buf, engine="openpyxl") as _xw:
-                longo.to_excel(_xw, sheet_name=t("colon.export.sheet_long"), index=False)
-                largo.to_excel(_xw, sheet_name=t("colon.export.sheet_wide"), index=False)
-                pd.concat([col.tabela_blocos(p).assign(parcela=p.parcela)
-                           for p in parcelas]).to_excel(
-                    _xw, sheet_name=t("colon.export.sheet_blocks"), index=False)
+            _buf = io.BytesIO(exportar.bytes_xlsx({
+                t("colon.export.sheet_long"): longo, t("colon.export.sheet_wide"): largo,
+                t("colon.export.sheet_blocks"): pd.concat(
+                    [col.tabela_blocos(p).assign(parcela=p.parcela) for p in parcelas])}, LANG))
         st.session_state["colon_xlsx_bytes"] = (_SIG, _buf.getvalue())
     _pronto = st.session_state.get("colon_xlsx_bytes")
     if _pronto and _pronto[0] == _SIG:

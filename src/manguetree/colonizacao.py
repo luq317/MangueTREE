@@ -110,6 +110,7 @@ class Bloco:
     col_altura_ano: int = None          # coluna de altura usada para o ano
     rotulo_ano: object = None           # ano escrito no bloco ("<1998" ou inteiro)
     coletas: list = field(default_factory=list)   # [(numero, data)]
+    coletas_col: list = field(default_factory=list)   # [(numero, data, coluna do rotulo)]
     ano: int = None
     origem_ano: str = ""                # "rotulo", "coluna ref", "data" ou "manual"
 
@@ -353,7 +354,8 @@ def _monta_blocos(campos, rows_acima):
                 else:
                     if not any(c[2] == j for c in b.coletas):
                         b.coletas.append([None, d, j])
-        b.coletas = [(n, d) for n, d, _ in sorted(b.coletas, key=lambda c: c[2])]
+        b.coletas_col = [tuple(c) for c in sorted(b.coletas, key=lambda c: c[2])]
+        b.coletas = [(n, d) for n, d, _ in b.coletas_col]
     return blocos
 
 
@@ -532,6 +534,7 @@ def _monta_individuo(parcela, grupo, linhas, fixos, blocos, avisos, classes_manu
         troncos_vivos = 0
         n_jovens = 0                        # linhas com J (um individuo pode ter 2 lacres em J)
         alturas_j = []                      # altura (cm) de cada linha com J (None se nao medida)
+        alturas_cols = {j: [] for j in b.cols_altura}     # idem, por coluna de altura (coleta)
         codigos_linhas = []
         for num, r in linhas:
             ultimo = ""
@@ -544,12 +547,15 @@ def _monta_individuo(parcela, grupo, linhas, fixos, blocos, avisos, classes_manu
             alt = None
             if b.col_altura_ano is not None and b.col_altura_ano < len(r):
                 alt = _como_numero(r[b.col_altura_ano])
-            codigos_linhas.append((ultimo, cl, alt, num))
+            alts = {j: (_como_numero(r[j]) if j < len(r) else None) for j in b.cols_altura}
+            codigos_linhas.append((ultimo, cl, alt, num, alts))
             if cl == "tronco":
                 troncos_vivos += 1
             elif cl == "jovem":
                 n_jovens += 1
                 alturas_j.append(alt)
+                for j in b.cols_altura:
+                    alturas_cols[j].append(alts[j])
         if not codigos_linhas:
             continue
         # linha principal: a que nao e tronco; se houver varias, a de maior prioridade
@@ -562,7 +568,8 @@ def _monta_individuo(parcela, grupo, linhas, fixos, blocos, avisos, classes_manu
             melhor = codigos_linhas[0]
         por_bloco[b.indice] = {"codigo": melhor[0], "classe": melhor[1], "altura": melhor[2],
                                "linha": melhor[3], "troncos_vivos": troncos_vivos,
-                               "n_jovens": n_jovens, "alturas_j": alturas_j}
+                               "n_jovens": n_jovens, "alturas_j": alturas_j,
+                               "alturas_cols": alturas_cols, "altura_cols": melhor[4]}
     return Individuo(parcela=parcela, grupo=grupo, linhas=[n for n, _ in linhas], coorte=coorte,
                      especie=especie, lado=lado, lacres=lacres, por_bloco=por_bloco)
 
@@ -641,8 +648,57 @@ def area_ha(parcela_letra, ano=None, areas=None):
     return float(v) / 10000.0
 
 
+def cobertura_unidas(parcelas, unidas):
+    """Quais parcelas de cada uniao tem dados em cada ano: {(uniao, ano): [parcelas]}.
+
+    Uma uniao esta incompleta num ano quando alguma parcela dela nao foi coletada: ai o
+    valor da uniao e so o das parcelas que tem dados (soma dos jovens sobre a soma das areas
+    dessas parcelas), por exemplo H+I em 2016 a 2018, quando so H foi coletada."""
+    anos = {p.parcela: {int(a) for a in tabela_individuos(p)["ano"].unique()} for p in parcelas}
+    out = {}
+    for nome, membros in (unidas or {}).items():
+        todos = set().union(*[anos.get(m, set()) for m in membros]) if membros else set()
+        for a in todos:
+            out[(nome, a)] = [m for m in membros if a in anos.get(m, set())]
+    return out
+
+
+def marca_unidas(df, parcelas, unidas, ocultar_incompletas=False):
+    """Acrescenta a tabela (com colunas ``parcela`` e ``ano``) ``membros`` (parcelas que
+    entraram no valor, ex. "H" ou "H+I"), ``n_parcelas`` e ``incompleta`` (True quando a
+    uniao nao tem dados de todas as parcelas naquele ano). Parcelas simples: ela mesma, 1,
+    False. Com ``ocultar_incompletas`` as linhas incompletas saem da tabela."""
+    df = df.copy()
+    cob = cobertura_unidas(parcelas, unidas)
+    total = {n: len(m) for n, m in (unidas or {}).items()}
+
+    def _membros(r):
+        return "+".join(cob.get((r["parcela"], int(r["ano"])), [])) if r["parcela"] in total \
+            else r["parcela"]
+    if df.empty:
+        return df.assign(membros=[], n_parcelas=[], incompleta=[])
+    df["membros"] = df.apply(_membros, axis=1)
+    df["n_parcelas"] = df["membros"].map(lambda m: len(m.split("+")) if m else 0)
+    df["incompleta"] = [r.parcela in total and r.n_parcelas < total[r.parcela]
+                        for r in df.itertuples()]
+    if ocultar_incompletas:
+        df = df[~df["incompleta"]].reset_index(drop=True)
+    return df
+
+
+def lista_incompletas(df):
+    """Uma frase por uniao incompleta: {uniao: {anos: [...], membros: "H"}} para avisos."""
+    if df.empty or "incompleta" not in df or not df["incompleta"].any():
+        return {}
+    out = {}
+    for r in df[df["incompleta"]][["parcela", "ano", "membros"]].drop_duplicates().itertuples():
+        d = out.setdefault(r.parcela, {})
+        d.setdefault(r.membros, []).append(int(r.ano))
+    return {k: {m: sorted(set(a)) for m, a in v.items()} for k, v in out.items()}
+
+
 def densidade_jovens(parcelas, incluir_sem_coorte=False, unidas=None, areas=None,
-                     por_especie=False, troncos=False):
+                     por_especie=False, troncos=False, ocultar_incompletas=False):
     """Densidade de jovens (ind/ha) por parcela e ano.
 
     ``parcelas`` e uma lista de ParcelaLida. ``unidas`` e {"A+B": ["A", "B"]}: soma
@@ -650,12 +706,19 @@ def densidade_jovens(parcelas, incluir_sem_coorte=False, unidas=None, areas=None
     Batista (2024); True e a de Motta (2026). ``troncos`` True conta tambem os troncos
     adicionais (TR) vivos (densidade de troncos, tr/ha).
 
-    Retorna DataFrame: parcela, ano, [especie,] n, area_ha, ind_ha.
+    Uniao: ind/ha = soma dos jovens das parcelas / soma das suas areas (nao a media das
+    densidades; as duas dao o mesmo valor so quando as areas sao iguais). Num ano em que
+    falta uma parcela da uniao, vale so a das parcelas com dados e ``incompleta`` e True;
+    ``ocultar_incompletas`` tira essas linhas.
+
+    Retorna DataFrame: parcela, ano, [especie,] n, area_ha, ind_ha, membros, n_parcelas,
+    incompleta.
     """
     tabs = pd.concat([tabela_individuos(p) for p in parcelas], ignore_index=True) \
         if parcelas else pd.DataFrame()
     if tabs.empty:
-        return pd.DataFrame(columns=["parcela", "ano", "n", "area_ha", "ind_ha"])
+        return pd.DataFrame(columns=["parcela", "ano", "n", "area_ha", "ind_ha", "membros",
+                                     "n_parcelas", "incompleta"])
     j = tabs[tabs["classe"] == "jovem"]
     if not incluir_sem_coorte:
         j = j[j["categoria_coorte"] == "valida"]
@@ -685,6 +748,7 @@ def densidade_jovens(parcelas, incluir_sem_coorte=False, unidas=None, areas=None
             partes.append(g)
         cont = pd.concat([resto] + partes, ignore_index=True)
     cont["ind_ha"] = cont["n"] / cont["area_ha"]
+    cont = marca_unidas(cont, parcelas, unidas, ocultar_incompletas)
     return cont.sort_values(chave).reset_index(drop=True)
 
 
@@ -801,26 +865,127 @@ def compara_com_referencia(densidade, referencia, tolerancia=1.0):
 ALTURA_1M_CM = 100.0
 
 
-def alturas_jovens(parcelas, incluir_sem_coorte=True, unidas=None, classes=("jovem",)):
-    """Uma linha por individuo (por linha com J, no caso dos jovens) com altura medida:
-    parcela, ano, especie, classe, altura (cm). A altura do ano e a da ultima coleta do
-    bloco com altura medida. ``classes`` escolhe as classes (jovem, plantula, propagulo,
-    morto...). ``unidas`` junta parcelas ({"A+B": ["A", "B"]}): os individuos entram juntos."""
-    linhas = []
+#: como escolher, num ano com mais de uma coleta de altura, a que vale: "mais_dados" (a coleta
+#: com mais alturas medidas; em empate, a mais recente) ou "ultima" (a mais recente com altura)
+MODOS_ALTURA = ("mais_dados", "ultima")
+
+
+def _rotulo_coleta(bloco, j):
+    """(rotulo, data) da coleta a que pertence a coluna de altura ``j`` do bloco."""
+    antes = [c for c in bloco.coletas_col if c[2] <= j]
+    if antes:
+        n, d, _ = antes[-1]
+        return (f"Coleta {n}" if n is not None else bloco.rotulo), d
+    return bloco.rotulo, bloco.data
+
+
+def _candidatos(parcelas, incluir_sem_coorte=True, classes=("jovem",)):
+    """Todas as colunas de altura (coletas) de cada ano de cada parcela, com as alturas:
+    {(parcela, ano, indice do bloco, coluna): dict(rotulo, data, linhas=[(especie, classe,
+    altura)])}. Um ano com mais de uma coluna de altura (ou dois blocos no mesmo ano) tem
+    mais de uma coleta."""
+    cands = {}
     for p in parcelas:
-        t = tabela_individuos(p)
-        t = t[t["classe"].isin(list(classes))]
-        if not incluir_sem_coorte:
-            t = t[t["categoria_coorte"] == "valida"]
-        for r in t.itertuples():
-            alturas = r.alturas_j if r.classe == "jovem" else [r.altura]
-            for h in alturas:
-                if h is not None and not pd.isna(h):
-                    linhas.append({"parcela": r.parcela, "ano": r.ano, "especie": r.especie,
-                                   "classe": r.classe, "altura": float(h)})
+        for b in p.blocos:
+            if b.ano is None:
+                continue
+            for j in b.cols_altura:
+                rot, data = _rotulo_coleta(b, j)
+                cands.setdefault((p.parcela, b.ano, b.indice, j),
+                                 {"rotulo": rot, "data": data, "bloco": b.rotulo, "linhas": []})
+        blocos = {b.indice: b for b in p.blocos if b.ano is not None}
+        for ind in p.individuos:
+            esp = ind.especie.strip().capitalize()
+            for bi, d in ind.por_bloco.items():
+                b = blocos.get(bi)
+                if b is None or d["classe"] not in classes:
+                    continue
+                if not incluir_sem_coorte and _categoria_coorte(ind.coorte, b.ano) != "valida":
+                    continue
+                for j in b.cols_altura:
+                    vals = d["alturas_cols"].get(j, []) if d["classe"] == "jovem" \
+                        else [d["altura_cols"].get(j)]
+                    for h in vals:
+                        if h is not None and not pd.isna(h):
+                            cands[(p.parcela, b.ano, bi, j)]["linhas"].append(
+                                (esp, d["classe"], float(h)))
+    return cands
+
+
+def _escolhidas(cands, selecao=None, modo="mais_dados"):
+    """Chave (parcela, ano, bloco, coluna) que vale em cada (parcela, ano): a escolhida em
+    ``selecao`` ({(parcela, ano): (bloco, coluna)}) ou a da regra ``modo``."""
+    if modo not in MODOS_ALTURA:
+        raise ValueError(f"modo de altura deve ser um de {MODOS_ALTURA}")
+    por_ano = {}
+    for k, v in cands.items():
+        por_ano.setdefault(k[:2], []).append((k, len(v["linhas"])))
+    out = {}
+    for pa, itens in por_ano.items():
+        itens = [(k, n) for k, n in itens if n > 0]
+        if not itens:
+            continue
+        manual = (selecao or {}).get(pa)
+        if manual is not None:
+            alvo = [k for k, _ in itens if (k[2], k[3]) == tuple(manual)]
+            if alvo:
+                out[pa] = alvo[0]
+                continue
+        if modo == "mais_dados":
+            out[pa] = max(itens, key=lambda kn: (kn[1], kn[0][2], kn[0][3]))[0]
+        else:
+            out[pa] = max(itens, key=lambda kn: (kn[0][2], kn[0][3]))[0]
+    return out
+
+
+def alturas_jovens(parcelas, incluir_sem_coorte=True, unidas=None, classes=("jovem",),
+                   selecao=None, modo="mais_dados"):
+    """Uma linha por individuo (por linha com J, no caso dos jovens) com altura medida:
+    parcela, ano, especie, classe, altura (cm). Num ano com mais de uma coleta de altura vale
+    a escolhida em ``selecao`` ({(parcela, ano): (bloco, coluna)}) ou, sem escolha, a da regra
+    ``modo``: "mais_dados" (a coleta com mais alturas medidas) ou "ultima" (a mais recente).
+    ``classes`` escolhe as classes (jovem, plantula, propagulo, morto...). ``unidas`` junta
+    parcelas ({"A+B": ["A", "B"]}): os individuos entram juntos."""
+    cands = _candidatos(parcelas, incluir_sem_coorte, classes)
+    linhas = []
+    for (parc, ano, _bi, _j) in _escolhidas(cands, selecao, modo).values():
+        for esp, cl, h in cands[(parc, ano, _bi, _j)]["linhas"]:
+            linhas.append({"parcela": parc, "ano": ano, "especie": esp, "classe": cl, "altura": h})
     df = pd.DataFrame(linhas, columns=["parcela", "ano", "especie", "classe", "altura"])
     for nome, membros in (unidas or {}).items():
         df.loc[df["parcela"].isin(membros), "parcela"] = nome
+    return df
+
+
+def tabela_alturas_coletas(parcelas, incluir_sem_coorte=True, classes=("jovem",), selecao=None,
+                           modo="mais_dados", minimo_cm=None):
+    """Altura (cm) de cada coleta de cada ano: N, media, desvio padrao, minimo e maximo, e
+    ``usada`` (a coleta que entra nas estatisticas do ano, ver ``alturas_jovens``) e
+    ``varias`` (o ano tem mais de uma coleta com altura). Colunas: parcela, ano, bloco, coleta,
+    data, coluna, n, media, dp, minimo, maximo, usada, varias, chave (bloco, coluna)."""
+    cands = _candidatos(parcelas, incluir_sem_coorte, classes)
+    escolha = set(_escolhidas(cands, selecao, modo).values())
+    nom = {}
+    linhas = []
+    for k, v in sorted(cands.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], kv[0][3])):
+        hs = pd.Series([h for _, _, h in v["linhas"] if minimo_cm is None or h >= minimo_cm],
+                       dtype=float)
+        if hs.empty:
+            continue
+        linhas.append({"parcela": k[0], "ano": k[1], "bloco": v["bloco"], "coleta": v["rotulo"],
+                       "data": v["data"].date() if v["data"] else None,
+                       "coluna": _letra_coluna(k[3]), "n": int(hs.count()), "media": hs.mean(),
+                       "dp": hs.std(ddof=1) if hs.count() > 1 else float("nan"),
+                       "minimo": hs.min(), "maximo": hs.max(), "usada": k in escolha,
+                       "chave": (k[2], k[3])})
+    cols = ["parcela", "ano", "bloco", "coleta", "data", "coluna", "n", "media", "dp",
+            "minimo", "maximo", "usada", "chave"]
+    df = pd.DataFrame(linhas, columns=cols)
+    if not df.empty:
+        n_col = df.groupby(["parcela", "ano"])["coluna"].transform("count")
+        df.insert(len(cols) - 1, "varias", n_col > 1)
+    else:
+        df.insert(len(cols) - 1, "varias", pd.Series(dtype=bool))
     return df
 
 
@@ -832,28 +997,30 @@ def _estatistica(g):
 
 
 def estatistica_altura(parcelas, incluir_sem_coorte=True, unidas=None, por_especie=False,
-                       minimo_cm=None, classes=("jovem",), por_classe=False):
+                       minimo_cm=None, classes=("jovem",), por_classe=False,
+                       ocultar_incompletas=False, selecao=None, modo="mais_dados"):
     """Altura (cm) por parcela e ano: N, media, desvio padrao (amostral), minimo e maximo.
     Por padrao so os jovens; ``classes`` escolhe outras (plantula, propagulo, morto...) e
     ``por_classe`` separa cada uma. ``minimo_cm=100`` usa so os individuos com 1 m ou mais."""
-    df = alturas_jovens(parcelas, incluir_sem_coorte, unidas, classes)
+    df = alturas_jovens(parcelas, incluir_sem_coorte, unidas, classes, selecao, modo)
     if minimo_cm is not None:
         df = df[df["altura"] >= minimo_cm]
     chave = ["parcela", "ano"] + (["especie"] if por_especie else []) + (["classe"] if por_classe else [])
     cols = chave + ["n", "media", "dp", "minimo", "maximo"]
     if df.empty:
-        return pd.DataFrame(columns=cols)
+        return pd.DataFrame(columns=cols + ["membros", "n_parcelas", "incompleta"])
     out = df.groupby(chave).apply(_estatistica, include_groups=False).reset_index()
     out["n"] = out["n"].astype(int)
-    return out[cols]
+    return marca_unidas(out[cols], parcelas, unidas, ocultar_incompletas)
 
 
-def densidade_relativa(parcelas, incluir_sem_coorte=False, unidas=None, areas=None):
+def densidade_relativa(parcelas, incluir_sem_coorte=False, unidas=None, areas=None,
+                       ocultar_incompletas=False):
     """Densidade relativa (%) de cada especie = densidade da especie / densidade total x 100
     (Motta, 2026, eq. 1). Colunas: parcela, ano, especie, n, area_ha, ind_ha, total_ind_ha,
     relativa."""
     d = densidade_jovens(parcelas, incluir_sem_coorte=incluir_sem_coorte, unidas=unidas,
-                         areas=areas, por_especie=True)
+                         areas=areas, por_especie=True, ocultar_incompletas=ocultar_incompletas)
     if d.empty:
         return d.assign(total_ind_ha=[], relativa=[])
     tot = d.groupby(["parcela", "ano"])["ind_ha"].transform("sum")
@@ -924,6 +1091,26 @@ def tabela_limpa(parcelas, formato="longo"):
 # Idade das parcelas e regressao log-linear
 # --------------------------------------------------------------------------
 
+def cruzar_altura_densidade(dens, alt):
+    """Junta a densidade de jovens (``densidade_jovens``, sem divisao por especie) e a altura
+    media (``estatistica_altura``, sem divisao por especie ou classe) por parcela e ano.
+    Fica so o ano que tem as duas. Colunas: parcela, ano, ind_ha, altura, dp, n_altura,
+    membros, incompleta (a da densidade; a da altura tambem conta), e ``altura_incompleta``."""
+    cols = ["parcela", "ano", "ind_ha", "altura", "dp", "n_altura", "membros", "incompleta"]
+    if dens is None or alt is None or dens.empty or alt.empty:
+        return pd.DataFrame(columns=cols)
+    d = dens[["parcela", "ano", "ind_ha"] + [c for c in ("membros", "incompleta") if c in dens]]
+    a = alt[["parcela", "ano", "media", "dp", "n"] + (["incompleta"] if "incompleta" in alt else [])]
+    a = a.rename(columns={"media": "altura", "n": "n_altura", "incompleta": "incompleta_alt"})
+    m = d.merge(a, on=["parcela", "ano"], how="inner")
+    if "membros" not in m:
+        m["membros"] = m["parcela"]
+    inc = m["incompleta"].fillna(False).astype(bool) if "incompleta" in m else False
+    inc_a = m["incompleta_alt"].fillna(False).astype(bool) if "incompleta_alt" in m else False
+    m["incompleta"] = inc | inc_a
+    return m[cols].sort_values(["parcela", "ano"]).reset_index(drop=True)
+
+
 def com_idade(densidade, inicio):
     """Acrescenta ``inicio`` (ano em que a parcela comecou a colonizar) e ``idade`` (anos)
     a tabela de ``densidade_jovens``. ``inicio`` e {parcela: ano}; parcelas sem ano ou com
@@ -952,6 +1139,59 @@ def regressao_log_linear(df, x="idade", y="ind_ha"):
     sxx = float(((lx - lx.mean()) ** 2).sum())
     return {"a": float(a), "b": float(b), "r2": (1 - res / tot) if tot > 0 else float("nan"),
             "n": int(len(d)), "ep_b": float(np.sqrt(res / (len(d) - 2) / sxx))}
+
+
+def _betacf(a, b, x):
+    """Continued fraction of the incomplete beta function (Lentz's method)."""
+    tiny = 1e-30
+    qab, qap, qam = a + b, a + 1.0, a - 1.0
+    c, d = 1.0, 1.0 - qab * x / qap
+    d = 1.0 / (d if abs(d) > tiny else tiny)
+    h = d
+    for m in range(1, 300):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        d = 1.0 / (d if abs(d) > tiny else tiny)
+        c = 1.0 + aa / c
+        c = c if abs(c) > tiny else tiny
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        d = 1.0 / (d if abs(d) > tiny else tiny)
+        c = 1.0 + aa / c
+        c = c if abs(c) > tiny else tiny
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < 3e-12:
+            break
+    return h
+
+
+def _p_bilateral(t, gl):
+    """Two-sided p-value of a Student t statistic with ``gl`` degrees of freedom."""
+    import math
+    x = gl / (gl + t * t)
+    a, b = gl / 2.0, 0.5
+    lbeta = math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+    bt = math.exp(lbeta + a * math.log(x) + b * math.log(1.0 - x)) if 0 < x < 1 else 0.0
+    return bt * _betacf(a, b, x) / a if x < (a + 1.0) / (a + b + 2.0) \
+        else 1.0 - bt * _betacf(b, a, 1.0 - x) / b
+
+
+def regressao_linear(x, y):
+    """Reta de minimos quadrados y = a + b x e correlacao de Pearson de duas series (pares
+    completos). Retorna dict(a, b, r, r2, p, n) ou None com menos de 3 pares ou sem variacao."""
+    d = pd.DataFrame({"x": pd.to_numeric(pd.Series(list(x)), errors="coerce"),
+                      "y": pd.to_numeric(pd.Series(list(y)), errors="coerce")}).dropna()
+    if len(d) < 3 or d["x"].std() == 0 or d["y"].std() == 0:
+        return None
+    xs, ys = d["x"].to_numpy(float), d["y"].to_numpy(float)
+    b, a = np.polyfit(xs, ys, 1)
+    r = float(np.corrcoef(xs, ys)[0, 1])
+    n = len(d)
+    p = _p_bilateral(r * np.sqrt((n - 2) / max(1 - r * r, 1e-15)), n - 2) if abs(r) < 1 else 0.0
+    return {"a": float(a), "b": float(b), "r": r, "r2": r * r, "p": float(p), "n": int(n)}
 
 
 def curva_esquematica(n=200):
@@ -1115,3 +1355,13 @@ def tabela_alertas_altura(parcela, maximo_cm=600.0):
                        "suspeitas": sum(1 for h in medidas if h <= 0 or h > maximo_cm)})
     return pd.DataFrame(linhas, columns=["ano", "linhas_j", "sem_altura", "altura_maxima",
                                          "suspeitas"])
+
+
+def correlacao(x, y):
+    """Correlacao de Pearson de duas series (pares completos); None com menos de 3 pares ou
+    sem variacao em alguma das series."""
+    d = pd.DataFrame({"x": pd.to_numeric(pd.Series(list(x)), errors="coerce"),
+                      "y": pd.to_numeric(pd.Series(list(y)), errors="coerce")}).dropna()
+    if len(d) < 3 or d["x"].std() == 0 or d["y"].std() == 0:
+        return None
+    return float(d["x"].corr(d["y"]))

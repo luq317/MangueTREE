@@ -223,7 +223,7 @@ def structural_summary(d, plot_area_m2, canopy_n=10):
     n_live_trees = live["tree_id"].nunique() if "tree_id" in live.columns else n_live
 
     # Heights: LIVE stems with a recorded height only (the NEMA protocol records no
-    # height for dead trees; Estrada 2013, p.151). Canopy height = mean of the
+    # height for dead trees; Estrada et al. 2013). Canopy height = mean of the
     # ``canopy_n`` tallest live heights (an adaptation; see the paper).
     h = live["height"].dropna()
     h_mean = float(h.mean()) if not h.empty else 0.0
@@ -522,7 +522,7 @@ def plot_parameters(res, dbh_limits=(2.5, 10.0)):
     """Every plot-level parameter of one analysis, flat (internal names).
 
     Includes the structural summary, the two Holdridge indices, stem counts, stems
-    without DBH (left out of density and basal area, as in the NEMA/UERJ spreadsheet)
+    without DBH (left out of density and basal area, as in the NEMA/UERJ protocol)
     and, for each DBH class, live and dead density and basal area. Class columns are
     named ``"<parameter> [<class>]"``.
     """

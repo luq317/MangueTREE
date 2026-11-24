@@ -32,6 +32,7 @@ from matplotlib.patches import FancyBboxPatch, Wedge, Rectangle  # noqa: E402
 
 from manguetree import calc as mc                                 # noqa: E402
 from manguetree import i18n                                       # noqa: E402
+from manguetree import unidades as _un                            # noqa: E402
 
 THEMES = {
     "light": {"bg": "#EEF1F4", "card": "#FFFFFF", "ink": "#1F3A5F", "muted": "#7A8A9C",
@@ -126,8 +127,8 @@ def summary_panel(res, theme="light", lang=None, colors=None, fmt="png", dpi=200
     # 2. Height
     r = [xs[1], 0.50, W, 0.355]; _card(fig, r, th)
     _title(fig, r, th, T("dashboard.height"), _fmt(s["height_mean_m"], 2, lang),
-           f"± {_fmt(s['height_sd_m'], 2, lang)} m",
-           T("dashboard.height_sub", canopy=_fmt(s["canopy_height_m"], 2, lang)))
+           f"± {_fmt(s['height_sd_m'], 2, lang)} {_un.altura_unidade()}",
+           T("dashboard.height_sub", canopy=_fmt(s["canopy_height_m"], 2, lang), u=_un.altura_unidade()))
     ax = fig.add_axes([r[0] + 0.02, r[1] + 0.05, r[2] - 0.04, 0.13])
     hmax = max(s.get("height_max_m") or 0, s.get("canopy_height_m") or 0, 1) * 1.15
     m_, sd = s["height_mean_m"] or 0, s["height_sd_m"] or 0
@@ -313,15 +314,15 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
     m_, sd, cn = s["height_mean_m"] or 0, s["height_sd_m"] or 0, s["canopy_height_m"] or 0
     tv = np.linspace(0, np.floor(hmax), 4).round()
     ticks = "".join(f'<text x="{X(t_):.1f}" y="104" class="a" text-anchor="{"start" if i == 0 else "end" if i == len(tv) - 1 else "middle"}"'
-                    f' style="text-anchor:{"start" if i == 0 else "end" if i == len(tv) - 1 else "middle"}">{t_:g} m</text>'
+                    f' style="text-anchor:{"start" if i == 0 else "end" if i == len(tv) - 1 else "middle"}">{t_:g} {_un.altura_unidade()}</text>'
                     for i, t_ in enumerate(tv))
     h_svg = (f'<svg viewBox="0 0 330 110" width="100%">'
              f'<line x1="{X(0)}" x2="{X(hmax)}" y1="60" y2="60" stroke="{th["track"]}" stroke-width="14" stroke-linecap="round"/>'
-             f'<g class="tip" data-tip="{_esc(T("dashboard.height_sub", canopy=F(cn, 2)))} · {F(m_, 2)} ± {F(sd, 2)} m">'
+             f'<g class="tip" data-tip="{_esc(T("dashboard.height_sub", canopy=F(cn, 2), u=_un.altura_unidade()))} · {F(m_, 2)} ± {F(sd, 2)} {_un.altura_unidade()}">'
              f'<line x1="{X(max(m_-sd, 0)):.1f}" x2="{X(m_+sd):.1f}" y1="60" y2="60" stroke="{th["accent"]}" stroke-width="14" stroke-linecap="round"/>'
              f'<circle cx="{X(m_):.1f}" cy="60" r="9" fill="{th["ink"]}" stroke="{th["card"]}" stroke-width="3"/></g>'
              f'<line x1="{X(cn):.1f}" x2="{X(cn):.1f}" y1="38" y2="82" stroke="{th["ink"]}" stroke-width="2" stroke-dasharray="4 3"/>'
-             f'<text x="{X(cn):.1f}" y="32" class="a">{_esc(T("dashboard.canopy"))} {F(cn, 2)} m</text>{ticks}</svg>')
+             f'<text x="{X(cn):.1f}" y="32" class="a">{_esc(T("dashboard.canopy"))} {F(cn, 2)} {_un.altura_unidade()}</text>{ticks}</svg>')
 
     # live density by species
     seg, x0 = "", 0.0
@@ -331,7 +332,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
             continue
         w = 330 * sh / 100
         txt = f'<text x="{x0+8:.1f}" y="31" class="w">{F(sh, 0)}%</text>' if sh >= 8 else ""
-        seg += (f'<g class="tip" data-tip="{_esc(name(sp))}: {F(sh, 1)}% · {F(row(sp, "density_live_ha"), 0)} '
+        seg += (f'<g class="tip" data-tip="{_esc(name(sp))}: {F(sh, 2)}% · {F(row(sp, "density_live_ha"), 2)} '
                 f'{_esc(T("dashboard.stems_ha"))}"><rect x="{x0:.1f}" y="10" width="{max(w-3, 1):.1f}" '
                 f'height="34" rx="6" fill="{colors.get(sp, "#888")}"/>{txt}</g>')
         x0 += w
@@ -367,7 +368,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
                        f'y2="{ly:.1f}" stroke="{th["muted"]}"/><text x="{lx+(4 if anchor=="start" else -4):.1f}" '
                        f'y="{ly+4:.1f}" class="n" style="text-anchor:{anchor}">{F(100*fr, 0)}%</text>')
             arcs += (f'<g class="tip" data-tip="{_esc(name(sp))} · {_esc(T("condition." + cond))}: {F(val, 2)} m²/ha '
-                     f'({F(100*fr, 1)}%)"><path d="{p}" fill="{fill}" stroke="{colors.get(sp, "#888") if cond=="dead" else th["card"]}" '
+                     f'({F(100*fr, 2)}%)"><path d="{p}" fill="{fill}" stroke="{colors.get(sp, "#888") if cond=="dead" else th["card"]}" '
                      f'stroke-width="1.5"/></g>{lab}')
             ang = a1
     tab_rows = "".join(
@@ -385,8 +386,8 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
     mort_body = (f'<svg viewBox="0 0 330 46" width="100%"><defs><pattern id="hm" width="6" height="6" '
                  f'patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="{th["card"]}"/>'
                  f'<line x1="0" y1="0" x2="0" y2="6" stroke="{th["ink"]}" stroke-width="3"/></pattern></defs>'
-                 f'<g class="tip" data-tip="{_esc(T("condition.live"))}: {F(lv, 1)}%"><rect x="0" y="6" width="{330*lv/100:.1f}" height="28" rx="6" fill="{th["ink"] if theme == "light" else th["accent"]}"/></g>'
-                 f'<g class="tip" data-tip="{_esc(T("condition.dead"))}: {F(100-lv, 1)}%"><rect x="{330*lv/100:.1f}" y="6" width="{330*(100-lv)/100:.1f}" height="28" rx="6" fill="url(#hm)" stroke="{th["ink"]}"/></g>'
+                 f'<g class="tip" data-tip="{_esc(T("condition.live"))}: {F(lv, 2)}%"><rect x="0" y="6" width="{330*lv/100:.1f}" height="28" rx="6" fill="{th["ink"] if theme == "light" else th["accent"]}"/></g>'
+                 f'<g class="tip" data-tip="{_esc(T("condition.dead"))}: {F(100-lv, 2)}%"><rect x="{330*lv/100:.1f}" y="6" width="{330*(100-lv)/100:.1f}" height="28" rx="6" fill="url(#hm)" stroke="{th["ink"]}"/></g>'
                  f'<text x="10" y="25" class="w">{F(lv, 0)}%</text></svg>'
                  f'<div class="s">{_esc(T("dashboard.ba_live_dead"))}</div><hr>'
                  f'<div class="k">{_esc(T("dashboard.holdridge"))}</div>'
@@ -394,13 +395,13 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
                  f'<div class="s">{_esc(T("dashboard.holdridge_10", v=F(cx_["dbh_gt_10"]["ci"], 2)))}</div>')
 
     cards = (card(T("labels.mean_dbh_cm").split(" (")[0], F(s["mean_dbh_cm"], 2), "cm", T("dashboard.dbh_classes"), dbh_svg)
-             + card(T("dashboard.height"), F(m_, 2), f"± {F(sd, 2)} m", T("dashboard.height_sub", canopy=F(cn, 2)), h_svg)
-             + card(T("labels.density_live_ha").split(" (")[0], F(s["density_live_ha"], 0), T("dashboard.stems_ha"),
+             + card(T("dashboard.height"), F(m_, 2), f"± {F(sd, 2)} {_un.altura_unidade()}", T("dashboard.height_sub", canopy=F(cn, 2), u=_un.altura_unidade()), h_svg)
+             + card(T("labels.density_live_ha").split(" (")[0], F(s["density_live_ha"], 2), T("dashboard.stems_ha"),
                     T("dashboard.share_species"), dens_body)
              + card(T("labels.ba_total_ha").split(" (")[0], F(s["ba_total_ha"], 2), "m²/ha",
                     T("dashboard.ba_sub", live=F(s["ba_live_ha"], 2), dead=F(s["ba_dead_ha"], 2)), ba_body, 2)
-             + card(T("dashboard.mortality"), F(s["mortality_stems_pct"], 1), T("dashboard.pct_stems"),
-                    T("dashboard.mort_ba", v=F(s["mortality_ba_pct"], 1)), mort_body))
+             + card(T("dashboard.mortality"), F(s["mortality_stems_pct"], 2), T("dashboard.pct_stems"),
+                    T("dashboard.mort_ba", v=F(s["mortality_ba_pct"], 2)), mort_body))
     css = f"""
     .mtp{{background:{th["bg"]};color:{th["ink"]};font-family:"Source Sans Pro","Inter",Arial,sans-serif;padding:26px 28px;border-radius:16px}}
     .mtp .hd{{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}}

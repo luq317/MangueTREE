@@ -1,6 +1,6 @@
 # User guide
 
-This guide describes the MangueTREE app (version 1.1.0). For the engine as a library, see the Quick start in the [README](https://github.com/luq317/MangueTREE/blob/main/README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
+This guide describes the MangueTREE app (version 1.2.0). For the engine as a library, see the Quick start in the [README](https://github.com/luq317/MangueTREE/blob/main/README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
 
 ## Starting the app
 
@@ -8,7 +8,7 @@ Desktop builds start with a double-click; see the Download section of the [READM
 
 The app opens in Portuguese. The language selector (flag) at the top of the sidebar switches to English; the choice is kept between pages and applies to tables, figures and exports. Below it, the page menu (Home, Single plot, Multiple plots, Temporal, About).
 
-The home page offers a **data template** (Portuguese or English headers; Excel with an instructions sheet and the species codes, or CSV).
+The home page offers, before the choice of analysis, a **data template** (with "How to format your data" inside the same box) (Portuguese or English headers; Excel with an instructions sheet and the species codes, or CSV).
 
 ## Settings shared by the analysis pages
 
@@ -48,10 +48,20 @@ Upload an Excel file with one sheet per plot, fill the sidebar form and click ru
 Upload one Excel file per plot, each sheet one survey (year). The year comes from the sheet name; years not found must be typed, and all of them can be checked in "Check the years of the sheets".
 
 - **Evolution.** Any plot parameter over the years (DBH, heights, live, dead and total density and basal area, counts, mortality, Holdridge, richness, each DBH class, stems without DBH), as lines or columns, in separate charts or on two axes. With several plots: one line per plot or mean ± SD.
+  In Evolution and Mortality, one row above the charts has the chart type, gaps, **Adjust charts** (axis limits of each chart separately, size and bar width) and **Chart tables** (pick which tables to download), so there are no per-chart buttons. Species always follow the same order in every chart: Rhizophora, Avicennia, Laguncularia, Conocarpus, others, unidentified last.
 - **By species.** Any species parameter (density and basal area live, dead and total, shares, DBH, heights, RD, RDo), opening on live + dead basal area (dead hatched). Lines, columns, stacked or 100% stacked, with optional values. With several plots: plots side by side, one species with the plots side by side, the difference between two plots, the mean, or one plot. The table under the chart shows the same data and says which.
 - **Mortality.** Mortality in stems and in basal area, live and dead by species, and the number of stems without DBH in each year.
 - **Full series, Data check, Export.**
 - Years without a survey: columns are placed side by side by default; "Leave space for years without a survey" puts the gaps back.
+
+## Units, decimals and saved tables
+
+- **Height unit.** Choose metres or centimetres in the sidebar; it applies to tables, charts, exports and the PDF report of every page.
+- **Two decimals.** Results in tables, labels and exports have two decimals (0,00 in Portuguese, 0.00 in English); counts stay whole. Chart axes show the complete numbers.
+- **Layout.** Above each chart, two small buttons (Adjust and Chart table) sit on the right. Chart type, metric and condition are menus that collapse, side by side; options such as showing values sit just below them.
+- **Save the table of a chart.** Next to the save-as-picture button, each chart has a **Chart table** menu: Excel, CSV or TXT with the data of that chart.
+- **Excel, CSV or TXT.** Every export offers the three formats. The CSV opens directly in Excel (Portuguese: `;` and decimal comma; English: `,` and point); if columns look glued together in another program, use the Excel file or the TXT (tab-separated).
+- **Colonization, height by collection.** In years with more than one collection, the Height tab shows the mean, SD and N of each one and which is used (by default the one with most heights); open **Collections of each year** to choose another. The Crossing tab in Charts draws height with density, as lines or X vs Y.
 
 ## Reading the results
 

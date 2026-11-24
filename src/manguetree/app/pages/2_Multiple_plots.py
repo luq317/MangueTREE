@@ -23,6 +23,7 @@ import streamlit as st
 
 from manguetree import calc as mc
 from manguetree import charts as ui
+from manguetree import exportar
 from manguetree import io as mio
 from manguetree import i18n
 from manguetree.i18n import t
@@ -121,6 +122,7 @@ resultados = st.session_state.get("multi_resultados")
 if not resultados:
     st.info(t("multi.select_prompt"))
     st.stop()
+resultados = ui.na_unidade(resultados)         # heights in the unit chosen in the sidebar
 ignoradas = st.session_state.get("multi_ignoradas", {})
 
 st.success(t("multi.processed", n=len(resultados)))
@@ -177,23 +179,29 @@ with tabs[0]:
         st.caption(t("multi.radar_note"))
         st.divider()
     base_params = [c for c in ui.metric_columns(df_param) if str(c).isidentifier()]
-    cf1, cf2, cf3 = st.columns(3)
-    modo_f = cf1.radio(t("multi.free_mode"), ("single", "dual", "xy"), horizontal=True,
-                       key="modo_livre", format_func=lambda k: t(f"multi.free.{k}"))
+    # collapsing menus in one row: chart, type, parameter (and second parameter)
     tipo_f, estilo_2 = "bar", "lines+markers"
+    _n_cols = 4 if st.session_state.get("modo_livre", "single") != "single" else 3
+    cf = st.columns(_n_cols)
+    modo_f = cf[0].selectbox(t("multi.free_mode"), ("single", "dual", "xy"), key="modo_livre",
+                             format_func=lambda k: t(f"multi.free.{k}"))
     if modo_f == "single":
-        tipo_f = cf2.radio(t("multi.chart_kind"), ("box", "violin", "bar", "line"), horizontal=True,
-                           key="tipo_livre", format_func=lambda k: t(f"multi.kind.{k}"))
+        tipo_f = cf[1].selectbox(t("multi.chart_kind"), ("box", "violin", "bar", "line"),
+                                 key="tipo_livre", format_func=lambda k: t(f"multi.kind.{k}"))
     elif modo_f == "dual":
-        estilo_2 = cf2.radio(t("multi.second_style"), ("lines+markers", "markers"), horizontal=True,
-                             key="estilo_2", format_func=lambda k: t(f"multi.second_style.{k}"))
-    ca_, cb_ = st.columns(2)
-    metrica = ca_.selectbox(t("multi.compare_by"), base_params,
-                            index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
-                            key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
+        estilo_2 = cf[1].selectbox(t("multi.second_style"), ("lines+markers", "markers"),
+                                   key="estilo_2",
+                                   format_func=lambda k: t(f"multi.second_style.{k}"))
+    else:
+        cf[1].selectbox(t("multi.chart_kind"), ("xy",), key="tipo_xy", disabled=True,
+                        format_func=lambda k: t("multi.free.xy"))
+    metrica = cf[2].selectbox(t("multi.compare_by"), base_params,
+                              index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
+                              key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
     segunda = None
     if modo_f != "single":
-        segunda = cb_.selectbox(t("multi.second_param"), base_params,
+        _c4 = cf[3] if len(cf) > 3 else st
+        segunda = _c4.selectbox(t("multi.second_param"), base_params,
                                 index=min(1, len(base_params) - 1), key="metrica_multi_b",
                                 format_func=lambda c: ui.label(c, LANG))
     ui.show(st, ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
@@ -205,7 +213,7 @@ with tabs[0]:
     st.radio(t("multi.share_base"), ("density", "ba"), key="multi_share_base", horizontal=True,
              format_func=lambda b: t(f"multi.share.{b}"))
     _tab = ui.for_display(df_param, lang=LANG).set_index(ui.label("plot", LANG))
-    st.dataframe(_tab.style.format(ui.format_by_dtype(_tab)), width="stretch")
+    st.dataframe(ui.estilo2(_tab, LANG), width="stretch")
     st.divider()
     ui.show_jimenez(st, df_param, estilos, "2_jim", LANG)
 
@@ -213,35 +221,29 @@ with tabs[1]:
     ui.report_section(t("multi.tab.species"))
     st.subheader(t("multi.species_title"))
     st.caption(t("multi.species_caption"))
-    ccol1, ccol2 = st.columns(2)
-    with ccol1:
-        met_esp = st.radio(t("single.metric"), ("ba_ha", "density_ha"),
-                           horizontal=True, key="met_esp",
-                           format_func=lambda k: ui.label(k, LANG))
-    with ccol2:
-        cond_esp = st.radio(t("labels.condition"), ("both", "live", "dead"),
-                            horizontal=True, key="cond_esp",
-                            format_func=lambda k: ui.condition_label(k, LANG))
+    # menus and the values checkbox in the same row as Adjust and Chart table
+    bar_m = ui.barra(st)
+    met_esp = bar_m.selectbox(t("single.metric"), ("ba_ha", "density_ha"), key="met_esp", width=200,
+                              format_func=lambda k: ui.label(k, LANG))
+    cond_esp = bar_m.selectbox(t("labels.condition"), ("both", "live", "dead"), key="cond_esp",
+                               width=170, format_func=lambda k: ui.condition_label(k, LANG))
+    tipo_st = bar_m.selectbox(t("temporal.chart"), ("stack", "stack100"), key="tipo_st_multi",
+                              width=230, format_func=lambda k: t(f"temporal.chart.{k}"))
+    val_st = bar_m.checkbox(t("temporal.values_short"), value=False, key="val_st_multi",
+                            help=t("temporal.show_values"))
+    UN_m = "ha"                                 # structure is always in stems per hectare
     metrica_key = "area" if met_esp == "ba_ha" else "densidade"
     df_long = ui.dados_especies_parcelas(resultados, metrica=metrica_key)
     y_lab = ui.label(met_esp, LANG)
-    if met_esp == "density_ha":
-        UN_m = st.radio(t("units.label"), ("ha", "count"), horizontal=True, key="units_multi",
-                        format_func=lambda k: t(f"units.{k}"))
-        if UN_m == "count":           # stems/ha back to stems in each plot
-            areas = {res["plot_name"]: res["summary"]["plot_area_m2"] for res in resultados}
-            df_long = df_long.assign(value=df_long["value"] * df_long["plot"].map(areas) / 10000.0)
-            y_lab = ui.label("n_stems", LANG)
-    cs1, cs2 = st.columns([2, 1])
-    with cs1:
-        tipo_st = st.radio(t("temporal.chart"), ("stack", "stack100"), horizontal=True,
-                           key="tipo_st_multi", format_func=lambda k: t(f"temporal.chart.{k}"))
-    with cs2:
-        val_st = st.checkbox(t("temporal.show_values"), value=False, key="val_st_multi")
+    if met_esp == "density_ha" and UN_m == "count":     # stems/ha back to stems in each plot
+        areas = {res["plot_name"]: res["summary"]["plot_area_m2"] for res in resultados}
+        df_long = df_long.assign(value=df_long["value"] * df_long["plot"].map(areas) / 10000.0)
+        y_lab = ui.label("n_stems", LANG)
     df_st = df_long if cond_esp == "both" else df_long[df_long["condition"] == cond_esp]
     fig_st = ui.fig_species_plots_stacked(df_st, estilos, y_lab, tipo_st, val_st, LANG)
     if fig_st:
-        ui.show(st, fig_st, "2_3", estilos)
+        ui.show(st, fig_st, "2_3", estilos, barra=bar_m)
+        st.caption(t("multi.species_note"))
     else:
         st.warning(t("multi.no_data_combo"))
     # pivot table: plots in rows, components (species + L/D) in columns
@@ -255,23 +257,22 @@ with tabs[1]:
         piv = dft.pivot_table(index="plot", columns="component", values="value",
                               aggfunc="sum", fill_value=0)
         piv.index.name = ui.label("plot", LANG)
-        st.dataframe(piv.style.format("{:.2f}"), width="stretch")
-        st.download_button(t("multi.species_csv"),
-                           data=piv.to_csv().encode("utf-8"),
-                           file_name=t("file.species_by_plot"), mime="text/csv")
+        st.dataframe(ui.estilo2(piv, LANG), width="stretch")
+        exportar.botoes(st, piv, t("file.species_by_plot").rsplit(".", 1)[0], "exp_multi_sp", LANG,
+                        titulo=t("multi.species_csv"))
 
 with tabs[2]:
     ui.report_section(t("multi.tab.ivi"))
     st.subheader(t("multi.ivi_title"))
-    st.caption(t("method.ivi_multi"))
     # densidade e área basal absolutas: troncos somados / soma das áreas das parcelas
     ivi = mc.pooled_importance(resultados)
     if ivi is not None and not ivi.empty:
-        st.dataframe(ui.for_display(ivi, lang=LANG).style.format(precision=2),
-                     width="stretch")
         fig = ui.fig_ivi(ivi, estilos, LANG)
         if fig:
             ui.show(st, fig, "2_4", estilos)
+        st.caption(t("method.ivi_multi"))
+        st.dataframe(ui.estilo2(ui.for_display(ivi, lang=LANG), LANG),
+                     width="stretch")
 
 with tabs[3]:
     map_rows = []
@@ -307,31 +308,25 @@ with tabs[5]:
                 r_ = m.iloc[[0]].assign(plot=str(res["plot_name"]))
                 _coords = r_ if _coords is None else pd.concat([_coords, r_], ignore_index=True)
     cc = st.columns(3)
+    cc[0].markdown("**" + t("export.pdf_title") + "**")
     ui.pdf_block(cc[0], "multi", lambda figs: rep.multiple_plots_report(
         resultados, df_param, ivi_all, df_long_esp,
         ui.issues_frame_by_unit(problemas, t("labels.sheet"), LANG),
         lang=LANG, seal=show_seal, figures=figs, coords=_coords),
         t("file.multi_pdf"), sig)
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as xls:
-        ui.for_display(df_param, lang=LANG).to_excel(
-            xls, sheet_name=t("sheet.comparison"), index=False)
-        if ivi_all is not None and not ivi_all.empty:
-            ui.for_display(ivi_all, lang=LANG).round(3).to_excel(
-                xls, sheet_name=t("sheet.ivi"), index=False)
-        for res in resultados:
-            nome = re.sub(r"[\\/*?:\[\]]", "", str(res["plot_name"]))[:26]
-            ui.tabela_por_especie(res, LANG).round(3).to_excel(
-                xls, sheet_name=(nome or "parc")[:26], index=False)
-        df_problemas.to_excel(xls, sheet_name=t("sheet.issues"), index=False)
-    buf.seek(0)
+    _tabs = {t("sheet.comparison"): ui.for_display(df_param, lang=LANG)}
+    if ivi_all is not None and not ivi_all.empty:
+        _tabs[t("sheet.ivi")] = ui.for_display(ivi_all, lang=LANG)
+    for res in resultados:
+        nome = re.sub(r"[\\/*?:\[\]]", "", str(res["plot_name"]))[:26]
+        _tabs[(nome or "parc")[:26]] = ui.tabela_por_especie(res, LANG)
+    _tabs[t("sheet.issues")] = df_problemas
     with cc[1]:
-        st.download_button(t("export.excel"), data=buf.getvalue(),
-                           file_name=t("file.multi_xlsx"),
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        exportar.botoes(st, None, t("file.multi_xlsx").rsplit(".", 1)[0], "exp_multi_all", LANG,
+                        tabelas=_tabs, titulo=t("export.all_tables"), lado_a_lado=False,
+                        nota=t("export.all_tables_note"))
     with cc[2]:
-        st.download_button(t("multi.comparison_csv"),
-                           data=ui.for_display(df_param, lang=LANG).to_csv(
-                               index=False).encode("utf-8"),
-                           file_name=t("file.comparison"), mime="text/csv")
+        exportar.botoes(st, ui.for_display(df_param, lang=LANG),
+                        t("file.comparison").rsplit(".", 1)[0], "exp_multi_cmp", LANG,
+                        titulo=t("multi.comparison_csv"), lado_a_lado=False)
     st.caption(t("export.multi_note"))

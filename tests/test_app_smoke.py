@@ -49,7 +49,7 @@ def test_single_plot_with_example_data():
     assert not at.exception
     assert not at.error and not at.warning
     metrics = {m.label: m.value for m in at.metric}
-    assert metrics["Live density (stems/ha)"] == "2978"   # F2 2009, lab: 2977.8
+    assert metrics["Live density (stems/ha)"] == "2977.78"   # F2 2009, lab: 2977.8 (two decimals)
 
 
 def test_multiple_plots_with_example_data():
@@ -152,9 +152,9 @@ def test_missing_condition_radio_changes_density(tmp_path):
     at.run()
     assert not at.exception
     dens = lambda: {m.label: m.value for m in at.metric}["Live density (stems/ha)"]
-    assert dens() == "200"                       # excluded: 2 live stems per 100 m2 (ha scale 100x)
+    assert dens() == "200.00"                      # excluded: 2 live stems per 100 m2 (ha scale 100x)
     at.radio(key="mc_unica").set_value("live").run()
-    assert dens() == "300"
+    assert dens() == "300.00"
 
 
 def test_species_csv_missing_columns_shows_error():

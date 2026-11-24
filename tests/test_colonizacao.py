@@ -179,6 +179,50 @@ def test_height_statistics(plot_k):
     assert big.loc[2005, "n"] == 1 and big.loc[2006, "n"] == 4
 
 
+def test_height_collections_table_and_choice(plot_k):
+    tc = col.tabela_alturas_coletas([plot_k])
+    assert list(tc["ano"]) == [2005, 2006] and tc["usada"].all() and not tc["varias"].any()
+    assert tc.set_index("ano").loc[2005, "n"] == 6
+    # a choice that does not exist falls back to the automatic rule
+    base = col.estatistica_altura([plot_k])
+    ruim = col.estatistica_altura([plot_k], selecao={("K", 2005): (99, 99)})
+    assert base.equals(ruim)
+    for modo in col.MODOS_ALTURA:
+        assert col.estatistica_altura([plot_k], modo=modo).equals(base)
+    with pytest.raises(ValueError):
+        col.alturas_jovens([plot_k], modo="outra")
+
+
+def test_height_collections_choose_the_one_with_most_heights(plot_k):
+    """Two collections in the same year: the one with more heights wins by default, the latest
+    wins under "ultima", and a manual choice beats both."""
+    import copy
+    parc = copy.deepcopy(plot_k)
+    b = next(b for b in parc.blocos if b.ano == 2005)
+    j0 = b.cols_altura[0]
+    j1 = j0 + 1
+    b.cols_altura = [j0, j1]
+    b.coletas_col = [(1, None, j0), (2, None, j1)]
+    for ind in parc.individuos:
+        d = ind.por_bloco.get(b.indice)
+        if d is None or d["classe"] != "jovem":
+            continue
+        d["alturas_cols"] = {j0: list(d["alturas_cols"][j0]), j1: []}
+        d["altura_cols"] = {j0: d["altura_cols"][j0], j1: None}
+    # the last collection only has the first individual's height
+    primeiro = next(i for i in parc.individuos if i.por_bloco.get(b.indice, {}).get("alturas_cols"))
+    primeiro.por_bloco[b.indice]["alturas_cols"][j1] = [99.0]
+    tc = col.tabela_alturas_coletas([parc]).query("ano == 2005")
+    assert len(tc) == 2 and tc["varias"].all()
+    assert tc.set_index("coluna")["usada"].sum() == 1
+    auto = col.estatistica_altura([parc]).set_index("ano")
+    assert auto.loc[2005, "n"] == 6                                   # first collection
+    ult = col.estatistica_altura([parc], modo="ultima").set_index("ano")
+    assert ult.loc[2005, "n"] == 1 and ult.loc[2005, "media"] == 99.0
+    man = col.estatistica_altura([parc], selecao={("K", 2005): (b.indice, j1)}).set_index("ano")
+    assert man.loc[2005, "n"] == 1
+
+
 def test_joined_height_pools_the_individuals(tmp_path):
     a = col.le_parcela(_workbook(tmp_path / "Parcela A.xlsx", "A"))
     b = col.le_parcela(_workbook(tmp_path / "Parcela B.xlsx", "B"))
@@ -375,6 +419,11 @@ def _page_with_upload(tmp_path, run=True):
     return at
 
 
+def _df_with(at, *cols):
+    """First table of the page that has all these columns."""
+    return next(d.value for d in at.dataframe if set(cols) <= set(d.value.columns))
+
+
 def _density_table(at):
     """The ind/ha table of the density tab (float values, one column per plot)."""
     return next(d.value for d in at.dataframe
@@ -390,8 +439,9 @@ def test_page_without_upload_asks_for_files():
 def test_page_shows_the_check_and_the_density(tmp_path):
     at = _page_with_upload(tmp_path)
     assert not at.exception and not at.error
-    assert [t.label for t in at.tabs][:4] == ["Check", "Juvenile density", "Height", "Charts"]
-    summary = at.dataframe[0].value
+    labels = [t.label for t in at.tabs]
+    assert labels[0] == "Charts" and labels[-2:] == ["Check", "Export"]
+    summary = _df_with(at, "Plot", "Individuals")
     assert summary["Plot"].tolist() == ["K"] and summary["Individuals"].tolist() == [7]
     assert summary["Repeated tags"].tolist() == [1] and summary["No cohort"].tolist() == [1]
     density = _density_table(at)
@@ -403,9 +453,9 @@ def test_page_year_correction_can_be_applied_and_undone(tmp_path):
     at.number_input(key="colon_fix_ano_K_1").set_value(2003)
     at.button(key="colon_fix_ok_K").click().run()
     assert not at.exception
-    assert at.dataframe[1].value["Year"].tolist() == [2003, 2006]
+    assert _df_with(at, "Year", "Source of the year")["Year"].tolist() == [2003, 2006]
     at.button(key="colon_fix_clear_K").click().run()
-    assert at.dataframe[1].value["Year"].tolist() == [2005, 2006]
+    assert _df_with(at, "Year", "Source of the year")["Year"].tolist() == [2005, 2006]
 
 
 # --- validation against the monograph workbooks (private; skipped when absent)
@@ -552,13 +602,15 @@ def test_height_chart_names_classes(plot_k):
 def test_page_charts_tab_shows_every_chart_without_switching(tmp_path):
     at = _page_with_upload(tmp_path)
     assert not at.exception
-    assert [t.label for t in at.tabs][4:9] == ["Density", "Age", "Height", "Count by cohort", "Jiménez schematic"]
-    at.radio(key="colon_ct_por").set_value("codigo").run()
+    assert [t.label for t in at.tabs][1:7] == ["Density", "Height", "Age", "Crossing", "Count by cohort",
+                                               "Jiménez schematic"]
+    at.selectbox(key="colon_ct_por").set_value("codigo").run()
     at.multiselect(key="colon_ct_itens_codigo").set_value(["J", "X"]).run()
-    at.radio(key="colon_ct_pilha").set_value("item").run()
+    at.selectbox(key="colon_ct_pilha").set_value("item").run()
     at.checkbox(key="colon_ct_pct").set_value(True).run()
     assert not at.exception
-    at.radio(key="colon_fit_modo").set_value("plot").run()
+    at.number_input(key="colon_inicio_K").set_value(2000).run()     # age needs the start year
+    at.selectbox(key="colon_fit_modo").set_value("plot").run()
     assert not at.exception
 
 
@@ -602,3 +654,273 @@ def test_colonization_page_is_hidden_unless_switched_on(monkeypatch):
     assert not at.sidebar.file_uploader if hasattr(at.sidebar, "file_uploader") else True
     monkeypatch.setenv("MANGUETREE_COLONIZACAO", "true")
     assert charts.colonizacao_enabled() is True
+
+
+# --- joined plots with a year missing in one plot (H+I in 2016-2018)
+
+@pytest.fixture
+def k_and_l_shifted(tmp_path):
+    """K: 2005 and 2006. L: 2005 and 2007. K+L is complete in 2005 only."""
+    k = col.le_parcela(_workbook(tmp_path / "Parcela K.xlsx", "K"))
+    l = col.le_parcela(_workbook(tmp_path / "Parcela L.xlsx", "L"), anos_manuais={1: 2007})
+    return k, l
+
+
+def test_joined_year_with_one_plot_is_flagged(k_and_l_shifted):
+    k, l = k_and_l_shifted
+    u = {"K+L": ["K", "L"]}
+    d = col.densidade_jovens([k, l], unidas=u).set_index("ano")
+    assert d["membros"].to_dict() == {2005: "K+L", 2006: "K", 2007: "L"}
+    assert d["n_parcelas"].to_dict() == {2005: 2, 2006: 1, 2007: 1}
+    assert d["incompleta"].to_dict() == {2005: False, 2006: True, 2007: True}
+    # the value of an incomplete year is that of the plots with data: count / their area
+    assert d.loc[2006, "area_ha"] == pytest.approx(0.006)
+    assert d.loc[2006, "ind_ha"] == pytest.approx(d.loc[2006, "n"] / 0.006)
+    assert col.lista_incompletas(d.reset_index()) == {"K+L": {"K": [2006], "L": [2007]}}
+
+
+def test_joined_density_is_sum_over_area_not_mean_of_densities(k_and_l_shifted):
+    k, l = k_and_l_shifted
+    d = col.densidade_jovens([k, l], unidas={"K+L": ["K", "L"]},
+                             areas={"K": 60.0, "L": 20.0}).set_index("ano")
+    s = col.densidade_jovens([k, l], areas={"K": 60.0, "L": 20.0})
+    nk = s[(s["parcela"] == "K") & (s["ano"] == 2005)]["n"].iloc[0]
+    nl = s[(s["parcela"] == "L") & (s["ano"] == 2005)]["n"].iloc[0]
+    assert d.loc[2005, "ind_ha"] == pytest.approx((nk + nl) / 0.008)
+    dk = s[(s["parcela"] == "K") & (s["ano"] == 2005)]["ind_ha"].iloc[0]
+    dl = s[(s["parcela"] == "L") & (s["ano"] == 2005)]["ind_ha"].iloc[0]
+    assert abs(d.loc[2005, "ind_ha"] - (dk + dl) / 2) > 1     # different areas: not the mean
+
+
+def test_hide_incomplete_years_everywhere(k_and_l_shifted):
+    k, l = k_and_l_shifted
+    u = {"K+L": ["K", "L"]}
+    d = col.densidade_jovens([k, l], unidas=u, ocultar_incompletas=True)
+    assert list(d["ano"]) == [2005]
+    assert set(col.densidade_relativa([k, l], unidas=u, ocultar_incompletas=True)["ano"]) == {2005}
+    e = col.estatistica_altura([k, l], unidas=u)
+    assert list(e["incompleta"]) == [False, True, True]
+    assert list(col.estatistica_altura([k, l], unidas=u, ocultar_incompletas=True)["ano"]) == [2005]
+
+
+def test_single_plots_are_never_incomplete(plot_k):
+    d = col.densidade_jovens([plot_k], areas={"K": 60.0})
+    assert not d["incompleta"].any() and set(d["membros"]) == {"K"}
+
+
+def test_charts_mark_incomplete_years(k_and_l_shifted):
+    from manguetree import charts, colonizacao_charts as cc
+    k, l = k_and_l_shifted
+    d = col.densidade_jovens([k, l], unidas={"K+L": ["K", "L"]})
+    estilos = {"paleta": charts.PALETAS[next(iter(charts.PALETAS))], "tamanho_titulo": 14,
+               "tamanho_eixos": 11, "seal": False, "bar_width": 0.8, "height": 450, "width": None}
+    fig = cc.fig_curva_densidade(d, estilos, "en")
+    main = fig.data[0]
+    assert list(main.text) == ["", "*", "*"]
+    assert list(main.marker.symbol) == ["circle", "diamond-open", "diamond-open"]
+    assert any("only part" in (tr.name or "") for tr in fig.data)
+
+
+@needs_data
+def test_h_plus_i_real_data_flags_2016_to_2018(monograph_plots):
+    hi = [p for p in monograph_plots if p.parcela in ("H", "I")]
+    d = col.densidade_jovens(hi, unidas={"H+I": ["H", "I"]}).set_index("ano")
+    assert d["incompleta"].loc[2016:2018].all() and not d["incompleta"].loc[:2015].any()
+    assert d.loc[2004, "ind_ha"] == pytest.approx(2 / 0.012)      # = mean of 0 and 333.3
+    h = col.densidade_jovens(hi).query("parcela == 'H'").set_index("ano")["ind_ha"]
+    assert d.loc[2016:2018, "ind_ha"].to_dict() == pytest.approx(h.loc[2016:2018].to_dict())
+
+
+def test_page_hide_option_and_warning(tmp_path):
+    from streamlit.testing.v1 import AppTest
+    ks = [("Parcela K.xlsx", _workbook(tmp_path / "Parcela K.xlsx", "K").read_bytes(), XLSX),
+          ("Parcela L.xlsx", _workbook(tmp_path / "Parcela L.xlsx", "L").read_bytes(), XLSX)]
+    at = AppTest.from_file(str(PAGE), default_timeout=60).run()
+    assert not any(c.key == "colon_ocultar" for c in at.checkbox)      # no union yet
+    at.file_uploader[0].set_value(ks).run()
+    at.multiselect(key="colon_join_1").set_value(["K", "L"])
+    next(b for b in at.button if "Run" in b.label).click().run()
+    assert not at.exception
+    assert at.checkbox(key="colon_ocultar").value is False
+    at.checkbox(key="colon_ocultar").set_value(True).run()
+    assert not at.exception
+
+
+def test_page_height_unit_changes_the_height_table(tmp_path):
+    """The app shows heights in metres by default; choosing cm gives the typed values."""
+    at = _page_with_upload(tmp_path)
+
+    def altura(a):
+        return next(d.value for d in a.dataframe
+                    if any(str(c).startswith(("Mean (", "Média (")) for c in d.value.columns))
+
+    def media(df):
+        return next(c for c in df.columns if str(c).startswith(("Mean (", "Média (")))
+    m = altura(at)
+    assert "(m)" in media(m)
+    at.radio(key="unidade_altura").set_value("cm").run()
+    assert not at.exception
+    cm = altura(at)
+    assert "(cm)" in media(cm)
+    assert cm[media(cm)].astype(float).tolist() == pytest.approx(
+        [v * 100 for v in m[media(m)].astype(float)])
+
+
+def test_cross_height_with_density(plot_k):
+    dens = col.densidade_jovens([plot_k], incluir_sem_coorte=True)
+    alt = col.estatistica_altura([plot_k], incluir_sem_coorte=True)
+    cruz = col.cruzar_altura_densidade(dens, alt)
+    assert cruz["ano"].tolist() == [2005, 2006]
+    assert cruz["ind_ha"].tolist() == dens.sort_values("ano")["ind_ha"].tolist()
+    assert cruz["altura"].tolist() == pytest.approx(alt.sort_values("ano")["media"].tolist())
+    assert not cruz["incompleta"].any()
+    assert col.cruzar_altura_densidade(dens.iloc[0:0], alt).empty
+    assert col.correlacao([1, 2], [1, 2]) is None                 # fewer than 3 pairs
+    assert col.correlacao([1, 2, 3], [2, 4, 6]) == pytest.approx(1.0)
+    assert col.correlacao([1, 1, 1], [2, 4, 6]) is None           # no variation
+
+
+def test_cross_figures(plot_k):
+    cruz = col.cruzar_altura_densidade(col.densidade_jovens([plot_k], incluir_sem_coorte=True),
+                                       col.estatistica_altura([plot_k], incluir_sem_coorte=True))
+    estilos = _estilos()
+    from manguetree import colonizacao_charts as cc
+    linha = cc.fig_cruzamento_linha(cruz, estilos, "pt")
+    assert len(linha.data) == 2 and linha.layout.yaxis2.overlaying == "y"
+    xy = cc.fig_cruzamento_xy(cruz, estilos, "en", "altura")
+    assert xy.layout.xaxis.title.text.startswith("Height")
+    assert list(xy.data[0].text) == ["2005", "2006"]
+
+
+def test_page_cross_tab(tmp_path):
+    at = _page_with_upload(tmp_path)
+    assert not at.exception
+    assert "Crossing" in [t.label for t in at.tabs]
+    at.selectbox(key="colon_cruz_modo").set_value("xy").run()
+    assert not at.exception
+
+
+def test_linear_regression_and_p_value():
+    r = col.regressao_linear([1, 2, 3, 4, 5, 6, 7], [22, 18, 15, 9, 8, 5, 4.5])
+    assert r["b"] < 0 and r["r"] == pytest.approx(-0.9755, abs=1e-3)
+    assert r["r2"] == pytest.approx(r["r"] ** 2) and 0 < r["p"] < 0.001 and r["n"] == 7
+    assert col._p_bilateral(2.0, 10) == pytest.approx(0.0734, abs=1e-3)   # Student t table
+    assert col.regressao_linear([1, 2], [1, 2]) is None
+
+
+def test_age_chart_has_zero_to_ten_axis_and_full_numbers():
+    import pandas as pd
+    from manguetree import colonizacao_charts as cc
+    df = pd.DataFrame({"parcela": ["A"] * 4 + ["B"] * 4, "idade": [1, 2, 3, 4] * 2,
+                       "ind_ha": [22000, 15000, 11000, 7500, 18000, 12000, 9000, 6000]})
+    for tipo in ("markers", "line", "bar", "hbar"):
+        for log in (False, True):
+            f = cc.fig_idade(df, {"": col.regressao_log_linear(df)}, _estilos(), "pt", tipo, log, True)
+            idade = f.layout.yaxis if tipo == "hbar" else f.layout.xaxis
+            valor = f.layout.xaxis if tipo == "hbar" else f.layout.yaxis
+            assert list(idade.range) == [0, 10.5] and idade.dtick == 2
+            if log:
+                assert valor.type == "log" and "1.000" in valor.ticktext and "10.000" in valor.ticktext
+            else:
+                assert valor.range[0] == 0 and valor.type == "linear"
+    w, h = cc.TAMANHO_IDADE
+    assert w < h
+
+
+def test_count_colours_helpers():
+    from manguetree import colonizacao_charts as cc
+    assert cc.hex_cor("rgb(68, 1, 84)") == "#440154" and cc.hex_cor("#abc") == "#aabbcc"
+    g = cc.gradiente("#2A9D8F", ["a", "b", "c"])
+    assert g["a"] != g["c"] and all(v.startswith("#") and len(v) == 7 for v in g.values())
+
+
+def test_page_age_and_colour_controls(tmp_path):
+    at = _page_with_upload(tmp_path)
+    for tipo in ("line", "hbar", "bar"):
+        at.selectbox(key="colon_idade_tipo").set_value(tipo).run()
+        assert not at.exception
+    at.selectbox(key="colon_idade_escala").set_value("log").run()
+    assert not at.exception
+    for modo in ("paleta", "gradiente", "cada"):
+        at.selectbox(key="colon_ct_cor_modo").set_value(modo).run()
+        assert not at.exception, modo
+
+
+def test_height_chart_types(plot_k):
+    from manguetree import charts as ui
+    from manguetree import colonizacao_charts as cc
+    est = col.estatistica_altura([plot_k], incluir_sem_coorte=True)
+    for tipo in ui.SERIES_CHARTS:
+        f = cc.fig_altura(est, _estilos(), "pt", tipo)
+        assert len(f.data) >= 1
+    assert cc.fig_altura(est, _estilos(), "pt", "markers").data[0].mode.startswith("markers")
+    assert cc.fig_altura(est, _estilos(), "pt", "hbar").data[0].orientation == "h"
+
+
+def test_jimenez_charts_share_margins(plot_k):
+    from manguetree import colonizacao_charts as cc
+    a = cc.fig_esquema(_estilos(), "pt")
+    b = cc.fig_curva_densidade(col.densidade_jovens([plot_k], incluir_sem_coorte=True), _estilos(), "pt")
+    cc.alinhar(a, b)
+    assert a.layout.margin.t == b.layout.margin.t and a.layout.margin.b == b.layout.margin.b
+    assert a.layout.xaxis.automargin is False and b.layout.xaxis.automargin is False
+
+
+def _joined_density():
+    import pandas as pd
+    return pd.DataFrame({"parcela": ["H+I"] * 6, "ano": [2004, 2005, 2006, 2007, 2008, 2009],
+                         "ind_ha": [100.0, 3000.0, 9000.0, 25000.0, 60000.0, 48000.0],
+                         "n": [1, 3, 9, 25, 60, 48], "incompleta": [False, False, False, False, True, True],
+                         "membros": ["H+I"] * 4 + ["H"] * 2})
+
+
+def test_joined_plots_legend_goes_below_and_nothing_is_clipped():
+    from manguetree import colonizacao_charts as cc
+    est = _estilos()
+    d = _joined_density()
+    for tipo in ("line", "markers", "bar", "hbar"):
+        f = cc.fig_curva_densidade(d, est, "pt", False, tipo)
+        if tipo in ("line", "markers"):
+            lg = f.layout.legend
+            assert lg.orientation == "h" and lg.yref == "container" and lg.y == 0
+            assert all(tr.cliponaxis is False for tr in f.data if tr.type == "scatter" and tr.legendgroup != "incompleta")
+        assert f.layout.margin.b >= 100 or tipo in ("bar", "hbar")
+    ag = d.assign(idade=[1, 2, 3, 4, 5, 6])
+    for tipo in ("markers", "line", "bar", "hbar"):
+        f = cc.fig_idade(ag, {"": col.regressao_log_linear(ag)}, est, "pt", tipo, False, True)
+        eixo = f.layout.yaxis if tipo == "hbar" else f.layout.xaxis
+        assert eixo.range[1] > 10                          # the point at the edge is not cut
+        assert f.layout.legend.x < 0.1 and f.layout.legend.y > 0.9      # legend inside, top left
+        assert any("união" in (a.text or "") for a in f.layout.annotations)
+    f = cc.fig_curva_densidade(d, est, "pt")
+    s = cc.fig_esquema(est, "pt")
+    cc.alinhar(s, f)
+    assert s.layout.margin.b == f.layout.margin.b >= 150
+
+
+def test_height_sd_goes_up_only_and_bars_start_at_the_axis(plot_k):
+    from manguetree import colonizacao_charts as cc
+    est = col.estatistica_altura([plot_k], incluir_sem_coorte=True)
+    f = cc.fig_altura(est, _estilos(), "pt", "line_sd")
+    e = f.data[0].error_y
+    assert e.symmetric is False and set(e.arrayminus) == {0}
+    b = cc.fig_altura(est, _estilos(), "pt", "bar_sd")
+    anos = sorted(est["ano"].unique())
+    assert b.layout.xaxis.range[0] == anos[0] - 0.6 and b.layout.yaxis.rangemode == "tozero"
+    assert cc.fig_altura(est, _estilos(), "pt").layout.title.text == "Altura"
+
+
+def test_page_joined_plots_every_chart_type(tmp_path):
+    from streamlit.testing.v1 import AppTest
+    ks = [(f"Parcela {l}.xlsx", _workbook(tmp_path / f"Parcela {l}.xlsx", l).read_bytes(), XLSX)
+          for l in ("K", "L")]
+    at = AppTest.from_file(str(PAGE), default_timeout=60).run()
+    at.file_uploader[0].set_value(ks).run()
+    at.multiselect(key="colon_join_1").set_value(["K", "L"])
+    next(b for b in at.button if "Run" in b.label).click().run()
+    for chave, tipos in (("colon_dens_tipo", ("markers", "bar", "hbar")),
+                         ("colon_alt_tipo", ("markers_sd", "bar_sd", "hbar")),
+                         ("colon_idade_tipo", ("line", "bar", "hbar"))):
+        for tp in tipos:
+            at.selectbox(key=chave).set_value(tp).run()
+            assert not at.exception, (chave, tp)

@@ -19,6 +19,13 @@ import pandas as pd
 from manguetree import i18n
 
 
+def _casas(v, dec):
+    """Results show two decimals (00,00); counts (dec 0) of whole numbers stay whole."""
+    if dec >= 2:
+        return dec
+    return 0 if dec == 0 and abs(v - round(v)) < 1e-9 else 2
+
+
 def fmt_br(v, dec=1, lang="pt") -> str:
     """12500.5 -> '12.500,5' (pt) / '12,500.5' (en); missing values -> '-'."""
     try:
@@ -27,6 +34,7 @@ def fmt_br(v, dec=1, lang="pt") -> str:
         return "-"
     if v != v:
         return "-"
+    dec = _casas(v, dec)
     s = f"{v:,.{dec}f}"
     if lang == "pt":
         s = s.replace(",", "\x00").replace(".", ",").replace("\x00", ".")

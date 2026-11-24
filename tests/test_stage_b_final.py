@@ -72,7 +72,7 @@ def test_single_plot_sheet_selector_reads_chosen_sheet():
     box.select("H2").run()
     assert not at.exception
     metrics = {m.label: m.value for m in at.metric}
-    assert metrics["Live density (stems/ha)"] == "7125"
+    assert metrics["Live density (stems/ha)"] == "7125.00"
     assert any("H2" in c.value for c in at.caption)
 
 

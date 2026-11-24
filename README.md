@@ -20,7 +20,7 @@ MangueTREE is a Python engine and a Streamlit app for the structural and phytoso
 - Time series: plots surveyed over the years (one workbook per plot, several together), every plot and species parameter, live and dead by species with the dead part hatched, comparison between plots.
 - Summary panel of a plot, interactive, downloadable as PNG or PDF.
 - Data validation before the analysis, with a report of every issue found and the action taken.
-- Exports: PDF reports, Excel tables, CSV files and every figure of a tab as PNG (ZIP, chosen DPI).
+- Exports: PDF reports, organised Excel tables, CSV files that open in Excel (Portuguese or English separators) and TXT, the table behind every chart, and every figure of a tab as PNG (ZIP, chosen DPI). Results with two decimals and heights in metres or centimetres.
 - Data template (Portuguese or English, Excel or CSV) on the home page.
 - Interface and exports in Portuguese and English.
 - Species table for the Neotropics (ten taxa, four regions) that users can edit and extend.
@@ -115,13 +115,13 @@ The `data/` folder holds permanent-plot data from the Guaratiba mangrove (Rio de
 
 The software has no DOI yet; it will be added here after the Zenodo release. Until then, cite:
 
-> Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.1.0. https://github.com/luq317/MangueTREE
+> Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.2.0. https://github.com/luq317/MangueTREE
 
 ```bibtex
 @software{pereira2026manguetree,
   author  = {Pereira, Lucas Silva and Motta, Laiza Lacerda and Matta, Tatiane Costa da and Chaves, Filipe de Oliveira and Soares, M{\'a}rio Luiz Gomes},
   title   = {{MangueTREE: structural and phytosociological analysis of mangrove forest plots}},
-  version = {1.1.0},
+  version = {1.2.0},
   year    = {2026},
   url     = {https://github.com/luq317/MangueTREE}
 }

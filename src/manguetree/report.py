@@ -40,6 +40,7 @@ import matplotlib.pyplot as plt
 from manguetree import calc as mc
 from manguetree import branding as marca
 from manguetree import i18n
+from manguetree import unidades as _un
 from manguetree import __version__
 
 # Estilo "artigo científico" para todas as figuras do relatório.
@@ -1040,6 +1041,7 @@ def _num(v, lang, dec=1):
         return "-"
     if not np.isfinite(v):
         return "-"
+    dec = 2 if dec >= 1 else (0 if abs(v - round(v)) < 1e-9 else 2)
     text = f"{v:,.{dec}f}"
     return text.replace(",", "X").replace(".", ",").replace("X", ".") if lang == "pt" else text
 
@@ -1115,7 +1117,7 @@ def _estrutural_2col(res, lang):
     right = [(T("report.struct.dbh_live"), f2(s["mean_dbh_cm"])),
              (ui.label("height_mean_m", lang), f2(s["height_mean_m"])),
              (ui.label("height_sd_m", lang), f2(s["height_sd_m"])),
-             (T("report.struct.height_minmax"), f"{f2(s['height_min_m'])} / {f2(s['height_max_m'])}"),
+             (T("report.struct.height_minmax", u=_un.altura_unidade()), f"{f2(s['height_min_m'])} / {f2(s['height_max_m'])}"),
              (ui.label("canopy_height_m", lang), f2(s["canopy_height_m"])),
              (ui.label("mortality_stems_pct", lang), f2(s["mortality_stems_pct"])),
              (ui.label("mortality_ba_pct", lang), f2(s["mortality_ba_pct"])),
@@ -1204,8 +1206,8 @@ def single_plot_report(res, lang="en", seal=False, figures=None, panel_png=None,
     f2 = lambda v: fm.fmt_br(v, 2, lang)
     kpis = [(T("report.kpi.dbh"), f2(s["mean_dbh_cm"]), "cm",
              T("report.kpi.sub.stems_tree", stems=fm.fmt_br(s["n_live"], 0, lang), spt=f2(s["stems_per_tree"]))),
-            (T("report.kpi.height_canopy"), f"{f2(s['height_mean_m'])} ± {f2(s['height_sd_m'])}", "m",
-             T("report.kpi.sub.canopy", canopy=f2(s["canopy_height_m"]), max=f2(s["height_max_m"]))),
+            (T("report.kpi.height_canopy"), f"{f2(s['height_mean_m'])} ± {f2(s['height_sd_m'])}", _un.altura_unidade(),
+             T("report.kpi.sub.canopy", canopy=f2(s["canopy_height_m"]), max=f2(s["height_max_m"]), u=_un.altura_unidade())),
             (T("report.kpi.density_live"), fm.fmt_br(s["density_live_ha"], 0, lang), "tr/ha" if lang == "pt" else "st./ha",
              T("report.kpi.sub.mort", m=fm.fmt_br(s["mortality_stems_pct"], 1, lang))),
             (T("report.kpi.ba_total"), f2(s["ba_total_ha"]), "m²/ha",
@@ -1436,7 +1438,7 @@ def temporal_report(df_serie, df_esp, issues_df=None, lang="en", seal=False, fig
                T("report.kpi.sub.temporal", y0=y0, v0=fm.fmt_br(v0, dec, lang), rate=("+" if rate >= 0 else "−") + fm.fmt_br(abs(rate), dec, lang)))
         return (f"{label} ({y1})", fm.fmt_br(v1, dec, lang), unit, sub)
     kpis = [k for k in (kpi("mean_dbh_cm", T("report.kpi.dbh"), 2, "cm"),
-                        kpi("canopy_height_m", T("report.kpi.canopy"), 2, "m"),
+                        kpi("canopy_height_m", T("report.kpi.canopy"), 2, _un.altura_unidade()),
                         kpi("density_live_ha", T("report.kpi.density_live"), 0, "tr/ha" if lang == "pt" else "st./ha"),
                         kpi("ba_live_ha", T("report.kpi.ba_live"), 2, "m²/ha")) if k]
     def first_last(c):
