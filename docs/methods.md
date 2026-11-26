@@ -1,6 +1,6 @@
 # Methods
 
-This document gives every formula, convention and source used by MangueTREE v1.2.0, and the decisions that the sources do not settle. Notation: DBH in cm, $A$ is the plot area in m², $N$ is the number of stems. Page numbers refer to the works listed in the [References](#references).
+This document gives every formula, convention and source used by MangueTREE v1.3.0, and the decisions that the sources do not settle. Notation: DBH in cm, $A$ is the plot area in m², $N$ is the number of stems. Page numbers refer to the works listed in the [References](#references).
 
 ## 1. Field conventions
 

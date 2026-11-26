@@ -30,10 +30,12 @@ from manguetree import colonizacao as col
 from manguetree import colonizacao_charts as cc
 from manguetree import exportar
 from manguetree import i18n
+from manguetree import nomes
 from manguetree.i18n import t
 
 st.set_page_config(layout="wide", page_title=t("colon.page_title"), page_icon=ui.PAGE_ICON)
 LANG = i18n.language_selector(st.sidebar)        # first on every page (see i18n.py)
+nomes.definir(t("file.colonization"))             # file names: Colonizacao_...
 ui.sidebar_nav(st.sidebar, tab_icons=("evolucao", "verificacao", "exportar"),
                subtab_icons=("densidade", "altura", "idade_parcela", "dinamica", "coorte", "curva_jimenez"))
 if not ui.colonizacao_enabled():                 # preview page: hidden unless switched on
@@ -250,7 +252,7 @@ def _painel_coletas():
         vista = multi.drop(columns=["bloco", "varias", "chave"]).rename(columns=nomes)
         vista[nomes["usada"]] = vista[nomes["usada"]].map(lambda u: "●" if u else "")
         st.dataframe(ui.estilo2(vista, LANG), hide_index=True, width="stretch")
-        exportar.botoes(st, multi.drop(columns=["varias", "chave"]), "altura_coletas",
+        exportar.botoes(st, multi.drop(columns=["varias", "chave"]), nomes.arquivo("altura-coletas"),
                         "exp_colon_coletas", LANG, titulo=t("colon.height.collections"))
         for (parc, ano), g in multi.groupby(["parcela", "ano"]):
             opcoes = ["auto"] + list(g["chave"])
@@ -484,7 +486,7 @@ with tab_graf:
                                                   aggfunc="first"), width="stretch")
                     st.caption(t("colon.density.note"))
                     _aviso_incompletas(dens)
-                    exportar.botoes(st, dens.drop(columns=["serie"]), "densidade_jovens", "exp_colon_dens",
+                    exportar.botoes(st, dens.drop(columns=["serie"]), nomes.arquivo("densidade-jovens"), "exp_colon_dens",
                                     LANG, titulo=t("colon.density.download"))
                     rel = col.densidade_relativa(parcelas, incluir_sem_coorte=COM_SEM_COORTE,
                                                  unidas=UNIDAS, areas=AREAS,
@@ -522,7 +524,7 @@ with tab_graf:
                 st.dataframe(ui.estilo2(vista.rename(columns=nomes), LANG), hide_index=True,
                              width="stretch")
                 st.caption(t("colon.height.note"))
-                exportar.botoes(st, est, "altura", "exp_colon_alt", LANG,
+                exportar.botoes(st, est, nomes.arquivo("altura"), "exp_colon_alt", LANG,
                                 titulo=t("colon.density.download"))
 
         # --- age: density against plot age (square axes, 0 to 10 years), optional fitted curve
@@ -634,7 +636,7 @@ with tab_graf:
                                "incompleta": t("colon.col.incomplete")}
                     st.dataframe(ui.estilo2(cruz_g.rename(columns=nomes_c), LANG),
                                  hide_index=True, width="stretch")
-                    exportar.botoes(st, cruz_g, "cruzamento_altura_densidade", "exp_colon_cruz",
+                    exportar.botoes(st, cruz_g, nomes.arquivo("cruzamento-altura-densidade"), "exp_colon_cruz",
                                     LANG, titulo=t("colon.gtab.cross"))
 
         # --- count by year, stacked by cohort, species or item
@@ -697,7 +699,7 @@ with tab_graf:
                 st.caption(t("colon.count.note"))
                 tab_c = vista.groupby(["ano", "grupo"])["n"].sum().unstack(fill_value=0)
                 st.dataframe(tab_c, width="stretch")
-                exportar.botoes(st, vista, "contagem_por_ano", "exp_colon_cont", LANG,
+                exportar.botoes(st, vista, nomes.arquivo("contagem-por-ano"), "exp_colon_cont", LANG,
                                 titulo=t("colon.density.download"))
 
         # --- Jimenez schematic next to the observed density (same size)
@@ -740,12 +742,12 @@ with tab_exp:
             col.densidade_jovens(parcelas, incluir_sem_coorte=COM_SEM_COORTE, unidas=UNIDAS, areas=AREAS,
                                  ocultar_incompletas=OCULTAR),
             lang=LANG, figures=figs),
-            "MangueTREE_colonizacao.pdf", (_SIG, COM_SEM_COORTE, LANG, OCULTAR))
+            nomes.arquivo(t("file.report")) + ".pdf", (_SIG, COM_SEM_COORTE, LANG, OCULTAR))
     d1, d2 = st.columns(2)
     _fmt = d1.radio(t("export.format_choice"), ("csv", "txt"), horizontal=True, key="colon_fmt",
                     format_func=lambda f: t(f"export.fmt_{f}"))
     d1.download_button(t("colon.export.csv"), _bytes_tab(mostrado, (_SIG, formato, so_usadas, UH), _fmt, LANG),
-                       file_name=f"colonizacao_{formato}.{_fmt}", mime=exportar.MIME[_fmt],
+                       file_name=nomes.arquivo(formato) + f".{_fmt}", mime=exportar.MIME[_fmt],
                        key="colon_csv")
     # the Excel file is big: it is built only when asked for
     if d2.button(t("colon.export.prepare_xlsx"), key="colon_xlsx_prep"):
@@ -758,6 +760,6 @@ with tab_exp:
         st.session_state["colon_xlsx_bytes"] = (_SIG, _buf.getvalue())
     _pronto = st.session_state.get("colon_xlsx_bytes")
     if _pronto and _pronto[0] == _SIG:
-        d2.download_button(t("colon.export.xlsx"), _pronto[1], file_name="colonizacao_limpa.xlsx",
+        d2.download_button(t("colon.export.xlsx"), _pronto[1], file_name=nomes.arquivo(t("file.tables")) + ".xlsx",
                            key="colon_xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

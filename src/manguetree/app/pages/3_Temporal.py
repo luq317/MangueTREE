@@ -28,6 +28,7 @@ from manguetree import calc as mc
 from manguetree import charts as ui
 from manguetree import exportar
 from manguetree import io as mio
+from manguetree import nomes
 from manguetree import i18n
 from manguetree.i18n import t
 from manguetree.validation import Issue
@@ -94,7 +95,7 @@ show_seal = ui.seal_checkbox(st.sidebar)
 estilos = ui.style_controls(st.sidebar, "temp", paleta_nome, show_seal)
 ui.icon_heading(st.sidebar, "exportar", t("export.batch_title"), 3)
 _dpi_lote = st.sidebar.select_slider(t("export.batch_dpi"), (150, 300, 450, 600), value=300, key="dpi_lote_temp")
-ui.batch_png_button(st.sidebar, _dpi_lote, "MangueTREE_temp_figuras.zip")
+_slot_lote = st.sidebar.container()      # filled once the plot and years (file prefix) are known
 selecionadas = {}
 for nome, abas in abas_por_arquivo.items():
     up = arquivos[nome]
@@ -231,6 +232,10 @@ if ignoradas:
         f"{a} ({t('sheets.reason.' + m)})" for a, m in ignoradas.items()))
 PLOTS = list(dict.fromkeys(df_serie["plot"]))
 MULTI = len(PLOTS) > 1
+_anos_ = pd.to_numeric(df_serie["year"], errors="coerce").dropna().astype(int)
+nomes.definir(nomes.lista_parcelas(PLOTS, LANG),
+              f"{_anos_.min()}-{_anos_.max()}" if len(_anos_) else "")    # file names: H2_2003-2025_...
+ui.batch_png_button(_slot_lote, _dpi_lote)
 
 st.success(t("temporal.analysed", n=df_serie["year"].nunique(), first=int(df_serie["year"].min()),
              last=int(df_serie["year"].max())))
@@ -282,7 +287,7 @@ with tabs[0]:
                     f_ = ui.show(col, ui.fig_series(df_serie, estilos, p, VIEW, grafico, LANG, GAPS),
                                  f"evol_{p}", estilos, comum=comum, gid=p)
                     figs_ev[ui.label(p, LANG)] = f_
-        ui.tabelas_grupo(slot_tab, "evol", figs_ev, LANG)
+        ui.tabelas_grupo(slot_tab, "evol", figs_ev, LANG, nome=t("file.tables_evol"))
     else:
         st.caption(t("temporal.dual_hint"))
         cE, cD = st.columns(2)
@@ -383,7 +388,7 @@ with tabs[1]:
         piv.index.name = ui.label("year", LANG)
         st.dataframe(ui.estilo2(piv, LANG), width="stretch")
         exportar.botoes(st, ui.for_display(df_esp, lang=LANG),
-                        t("file.series_by_species").rsplit(".", 1)[0], "exp_temp_sp", LANG,
+                        nomes.arquivo(t("file.series_by_species")), "exp_temp_sp", LANG,
                         titulo=t("temporal.species_csv"))
 
 with tabs[2]:
@@ -412,7 +417,7 @@ with tabs[2]:
               if MULTI else ui.fig_species_series(base_m, estilos, met_, "stack", False, LANG, GAPS))
         if f_:
             figs_m[_mort_ids[met_]] = ui.show(col_, f_, f"mort_{met_}", estilos, comum=comum_m, gid=met_)
-    ui.tabelas_grupo(slot_m, "mort", figs_m, LANG)
+    ui.tabelas_grupo(slot_m, "mort", figs_m, LANG, nome=t("file.tables_mort"))
     st.divider()
     st.caption(t("temporal.no_dbh_note"))
     cols_nd = ["plot", "year", "n_dead", "n_dead_no_dbh", "n_live_no_dbh"] if MULTI else \
@@ -449,17 +454,17 @@ with tabs[5]:
     cc[0].markdown("**" + t("export.pdf_title") + "**")
     ui.pdf_block(cc[0], "temp", lambda figs: rep.temporal_report(
         pdf_serie, pdf_esp, df_problemas, lang=LANG, seal=show_seal, figures=figs),
-        t("file.temporal_pdf"), sig)
+        nomes.arquivo(t("file.temporal_pdf")) + ".pdf", sig)
     _tabs = {t("sheet.time_series"): ui.for_display(df_serie, lang=LANG)}
     if df_esp is not None and not df_esp.empty:
         _tabs[t("sheet.by_species")] = ui.for_display(df_esp, lang=LANG)
     _tabs[t("sheet.issues")] = df_problemas
     with cc[1]:
-        exportar.botoes(st, None, t("file.temporal_xlsx").rsplit(".", 1)[0], "exp_temp_all", LANG,
+        exportar.botoes(st, None, nomes.arquivo(t("file.temporal_xlsx")), "exp_temp_all", LANG,
                         tabelas=_tabs, titulo=t("export.all_tables"), lado_a_lado=False,
                         nota=t("export.all_tables_note"))
     with cc[2]:
         exportar.botoes(st, ui.for_display(df_serie, lang=LANG),
-                        t("file.series").rsplit(".", 1)[0], "exp_temp_ser", LANG,
+                        nomes.arquivo(t("file.series")), "exp_temp_ser", LANG,
                         titulo=t("temporal.series_csv"), lado_a_lado=False)
     st.caption(t("export.temporal_note"))

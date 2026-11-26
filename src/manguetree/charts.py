@@ -35,6 +35,7 @@ from manguetree.unidades import altura_unidade, na_unidade  # noqa: F401  (pages
 from manguetree import branding as marca
 from manguetree.species import (REGIONS, SpeciesResolver, load_genus_defaults,
                                 load_species_table)
+from manguetree import nomes as _nomes
 from manguetree.validation import describe, describe_action, issues_to_frame
 
 # Config de exportação em alta resolução para todos os gráficos Plotly.
@@ -1824,7 +1825,7 @@ def ajustes_grupo(container, key, estilos, graficos):
     return out
 
 
-def tabelas_grupo(container, key, figs, lang=None):
+def tabelas_grupo(container, key, figs, lang=None, nome=None):
     """Compact "Chart tables" menu: pick which charts, then download them (Excel with a sheet
     per chart, or ZIP of CSV / TXT). ``figs`` is {label: figure}."""
     T = i18n.t
@@ -1839,7 +1840,7 @@ def tabelas_grupo(container, key, figs, lang=None):
         esc = pop.multiselect(T("chart.tables_pick"), list(tabs), default=list(tabs),
                               key=f"grptab_{key}")
         if esc:
-            _exp.botoes(pop, None, f"MangueTREE_{key}", f"grptab_dl_{key}", _lang(lang),
+            _exp.botoes(pop, None, _nomes.arquivo(nome or T("file.tables")), f"grptab_dl_{key}", _lang(lang),
                         tabelas={r: tabs[r] for r in esc}, lado_a_lado=False)
 
 
@@ -1924,14 +1925,17 @@ def show(container, fig, key, estilos=None, barra=None, comum=None, gid=None, bo
         fig.update_layout(yaxis_range=[lo, hi], yaxis_autorange=None)
     add_seal(fig)
     _register_fig(key, fig)
+    _base_nome = _nomes.arquivo(getattr(fig.layout.title, "text", None) or key)
     if barra is not None:
         tabela = _exp.tabela_da_figura(fig)
         if tabela is not None and not tabela.empty:
             with barra.popover(T("chart.table"), icon=":material/table_view:"):
                 st.caption(T("chart.table_hint"))
-                _exp.botoes(st, tabela, f"MangueTREE_{key}", f"tab_{key}", _lang(None),
+                _exp.botoes(st, tabela, _base_nome, f"tab_{key}", _lang(None),
                             lado_a_lado=False)
-    container.plotly_chart(fig, width=int(w) if w else "stretch", config=PLOT_CONFIG, key=f"fig_{key}")
+    config = {**PLOT_CONFIG, "toImageButtonOptions": {**PLOT_CONFIG["toImageButtonOptions"],
+                                                       "filename": _base_nome}}   # the camera button names the file
+    container.plotly_chart(fig, width=int(w) if w else "stretch", config=config, key=f"fig_{key}")
     return fig
 
 
@@ -1963,18 +1967,19 @@ document.getElementById('go').onclick=async()=>{const st=document.getElementById
  st.textContent=MSG_WORK;const files=[];let i=1;
  for(const gd of plots){let t=(gd._fullLayout.title&&gd._fullLayout.title.text)||('figura_'+i);
   t=t.replace(/<[^>]+>/g,'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
-  files.push({name:String(i).padStart(2,'0')+'_'+t+'.png',data:await png(gd,SCALE)});i++}
+  files.push({name:(PREFIX?PREFIX+'_':'')+String(i).padStart(2,'0')+'_'+t+'.png',data:await png(gd,SCALE)});i++}
  const a=document.createElement('a');a.href=URL.createObjectURL(zip(files));a.download=ZIPNAME;document.body.appendChild(a);a.click();
  st.textContent=MSG_DONE.replace('{n}',files.length)};
 """
 
 
-def batch_png_button(container, dpi, zip_name="MangueTREE_figuras.zip"):
+def batch_png_button(container, dpi, zip_name=None):
     """Button that saves every chart of the open tab as PNG (at ``dpi``) in one ZIP.
     The charts are drawn in the browser, so no extra program is needed."""
     import json
     T = i18n.t
-    js = (_ZIP_JS.replace("SCALE", str(dpi / 96.0)).replace("ZIPNAME", json.dumps(zip_name))
+    zip_name = zip_name or _nomes.arquivo(T("file.figures")) + ".zip"
+    js = (_ZIP_JS.replace("PREFIX", json.dumps(_nomes.prefixo())).replace("SCALE", str(dpi / 96.0)).replace("ZIPNAME", json.dumps(zip_name))
           .replace("MSG_NONE", json.dumps(T("export.batch_none"))).replace("MSG_WORK", json.dumps(T("export.batch_work")))
           .replace("MSG_DONE", json.dumps(T("export.batch_done"))))
     html = (f'<body style="margin:0;font-family:Source Sans Pro,Arial,sans-serif">'

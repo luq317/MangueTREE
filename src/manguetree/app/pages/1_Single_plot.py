@@ -22,6 +22,7 @@ from manguetree import calc as mc
 from manguetree import charts as ui
 from manguetree import exportar
 from manguetree import io as mio
+from manguetree import nomes
 from manguetree import i18n
 from manguetree.i18n import t
 from manguetree.validation import validate
@@ -82,7 +83,7 @@ show_seal = ui.seal_checkbox(st.sidebar)
 estilos = ui.style_controls(st.sidebar, "unica", paleta_nome, show_seal)
 ui.icon_heading(st.sidebar, "exportar", t("export.batch_title"), 3)
 _dpi_lote = st.sidebar.select_slider(t("export.batch_dpi"), (150, 300, 450, 600), value=300, key="dpi_lote_unica")
-ui.batch_png_button(st.sidebar, _dpi_lote, "MangueTREE_unica_figuras.zip")
+_slot_lote = st.sidebar.container()      # filled once the plot name (file prefix) is known
 
 
 
@@ -121,6 +122,8 @@ n_validos = int((df["dbh"] > 0).sum())
 st.success(t("single.processed", n=n_validos, rows=len(df), area=float(area_final)))
 plot_name = str(sheet) if sheet_count > 1 else uploaded.name.rsplit(".", 1)[0]
 st.caption(t("single.plot_label", name=plot_name))
+nomes.definir(plot_name, st.session_state.get("ano_painel", "").strip())     # file names: H2_2009_...
+ui.batch_png_button(_slot_lote, _dpi_lote)
 # the panel validates with the same choice for stems without condition as the analysis
 cond_faltante = st.session_state.get("mc_unica", "exclude")
 issues_unica = {"": validate(df, RESOLVER, missing_condition=cond_faltante)}
@@ -157,9 +160,9 @@ with tab_panel:
     d1, d2 = st.columns(2)
     PANEL_PNG = dash.summary_panel(res, tema, LANG, cores_p, "png", min(dpi_p, 200), sub_p)   # also goes in the PDF
     d1.download_button(t("dashboard.png"), dash.summary_panel(res, tema, LANG, cores_p, "png", dpi_p, sub_p),
-                       file_name=f"MangueTREE_painel_{plot_name}.png", mime="image/png", type="primary")
+                       file_name=nomes.arquivo(t("file.panel")) + ".png", mime="image/png", type="primary")
     d2.download_button(t("dashboard.pdf"), dash.summary_panel(res, tema, LANG, cores_p, "pdf", 300, sub_p),
-                       file_name=f"MangueTREE_painel_{plot_name}.pdf", mime="application/pdf")
+                       file_name=nomes.arquivo(t("file.panel")) + ".pdf", mime="application/pdf")
 
 # --- TAB 1: ESTRUTURA ---
 with tabs[0]:
@@ -382,14 +385,14 @@ with tabs[6]:
         st.markdown("**" + t("export.pdf_title") + "**")
         ui.pdf_block(st, "unica", lambda figs: rep.single_plot_report(
             res, lang=LANG, seal=show_seal, figures=figs, panel_png=PANEL_PNG, coords=_coords),
-            f"MangueTREE_{nome}.pdf", sig)
+            nomes.arquivo(t("file.report")) + ".pdf", sig)
     with c2:
-        exportar.botoes(st, None, f"MangueTREE_{nome}", "exp_single_all", LANG,
+        exportar.botoes(st, None, nomes.arquivo(t("file.tables")), "exp_single_all", LANG,
                         tabelas=ui.tabelas_exportacao(res, LANG),
                         titulo=t("export.all_tables"), lado_a_lado=False,
                         nota=t("export.all_tables_note"))
     with c3:
-        exportar.botoes(st, ui.tabela_por_especie(res, LANG), f"{t('file.by_species')}_{nome}",
+        exportar.botoes(st, ui.tabela_por_especie(res, LANG), nomes.arquivo(t("file.by_species")),
                         "exp_single_sp", LANG, titulo=t("export.by_species_csv"),
                         lado_a_lado=False)
     st.caption(t("export.single_note"))

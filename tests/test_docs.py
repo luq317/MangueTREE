@@ -59,7 +59,7 @@ def test_no_broken_links_to_removed_docs():
 def test_citation_cff_fields():
     text = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
     assert re.search(r"^cff-version: 1\.2\.0$", text, re.M)
-    assert re.search(r"^version: 1\.2\.0$", text, re.M)
+    assert re.search(r"^version: 1\.3\.0$", text, re.M)
     assert re.search(r"^license: GPL-3.0-or-later$", text, re.M)
     for name in ("Pereira", "Motta", "Matta", "Chaves", "Soares"):
         assert f"family-names: {name}" in text or f'family-names: "{name}"' in text, name
@@ -70,3 +70,25 @@ def test_no_em_dash_in_docs():
     files = _md_files() + [ROOT / "CITATION.cff"]
     for p in files:
         assert EM_DASH not in p.read_text(encoding="utf-8"), str(p)
+
+
+def test_manual_pages_images_and_nav():
+    """The manual exists in Portuguese and English with the same figures, and every page and
+    image it points to exists."""
+    pt = sorted((ROOT / "docs" / "pt").glob("*.md"))
+    en = sorted((ROOT / "docs" / "en").glob("*.md"))
+    assert len(pt) == len(en) == 11
+
+    def imagens(files):
+        return {m for p in files for m in re.findall(r"images/manual/([\w-]+)\.png",
+                                                     p.read_text(encoding="utf-8"))}
+
+    assert imagens(pt) == imagens(en) and imagens(pt)
+    for n in imagens(pt):
+        assert (ROOT / "docs" / "images" / "manual" / f"{n}.png").is_file(), n
+    nav = (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+    for p in pt + en:
+        assert f"{p.parent.name}/{p.name}" in nav, p.name
+    for p in pt + en:                              # relative links between pages
+        for alvo in re.findall(r"\]\(([\w./-]+\.md)(?:#[\w-]+)?\)", p.read_text(encoding="utf-8")):
+            assert (p.parent / alvo).resolve().is_file(), (p.name, alvo)

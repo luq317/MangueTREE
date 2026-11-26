@@ -25,6 +25,7 @@ from manguetree import calc as mc
 from manguetree import charts as ui
 from manguetree import exportar
 from manguetree import io as mio
+from manguetree import nomes
 from manguetree import i18n
 from manguetree.i18n import t
 
@@ -65,7 +66,7 @@ show_seal = ui.seal_checkbox(st.sidebar)
 estilos = ui.style_controls(st.sidebar, "multi", paleta_nome, show_seal)
 ui.icon_heading(st.sidebar, "exportar", t("export.batch_title"), 3)
 _dpi_lote = st.sidebar.select_slider(t("export.batch_dpi"), (150, 300, 450, 600), value=300, key="dpi_lote_multi")
-ui.batch_png_button(st.sidebar, _dpi_lote, "MangueTREE_multi_figuras.zip")
+_slot_lote = st.sidebar.container()      # filled once the plots (file prefix) are known
 
 
 # --- Formulário: preencha tudo e clique UMA vez (sem apertar Enter em cada campo) ---
@@ -123,6 +124,8 @@ if not resultados:
     st.info(t("multi.select_prompt"))
     st.stop()
 resultados = ui.na_unidade(resultados)         # heights in the unit chosen in the sidebar
+nomes.definir(nomes.lista_parcelas([r_["plot_name"] for r_ in resultados], LANG))     # file names: F2-H2-J2_...
+ui.batch_png_button(_slot_lote, _dpi_lote)
 ignoradas = st.session_state.get("multi_ignoradas", {})
 
 st.success(t("multi.processed", n=len(resultados)))
@@ -258,7 +261,7 @@ with tabs[1]:
                               aggfunc="sum", fill_value=0)
         piv.index.name = ui.label("plot", LANG)
         st.dataframe(ui.estilo2(piv, LANG), width="stretch")
-        exportar.botoes(st, piv, t("file.species_by_plot").rsplit(".", 1)[0], "exp_multi_sp", LANG,
+        exportar.botoes(st, piv, nomes.arquivo(t("file.species_by_plot")), "exp_multi_sp", LANG,
                         titulo=t("multi.species_csv"))
 
 with tabs[2]:
@@ -313,7 +316,7 @@ with tabs[5]:
         resultados, df_param, ivi_all, df_long_esp,
         ui.issues_frame_by_unit(problemas, t("labels.sheet"), LANG),
         lang=LANG, seal=show_seal, figures=figs, coords=_coords),
-        t("file.multi_pdf"), sig)
+        nomes.arquivo(t("file.multi_pdf")) + ".pdf", sig)
     _tabs = {t("sheet.comparison"): ui.for_display(df_param, lang=LANG)}
     if ivi_all is not None and not ivi_all.empty:
         _tabs[t("sheet.ivi")] = ui.for_display(ivi_all, lang=LANG)
@@ -322,11 +325,11 @@ with tabs[5]:
         _tabs[(nome or "parc")[:26]] = ui.tabela_por_especie(res, LANG)
     _tabs[t("sheet.issues")] = df_problemas
     with cc[1]:
-        exportar.botoes(st, None, t("file.multi_xlsx").rsplit(".", 1)[0], "exp_multi_all", LANG,
+        exportar.botoes(st, None, nomes.arquivo(t("file.multi_xlsx")), "exp_multi_all", LANG,
                         tabelas=_tabs, titulo=t("export.all_tables"), lado_a_lado=False,
                         nota=t("export.all_tables_note"))
     with cc[2]:
         exportar.botoes(st, ui.for_display(df_param, lang=LANG),
-                        t("file.comparison").rsplit(".", 1)[0], "exp_multi_cmp", LANG,
+                        nomes.arquivo(t("file.comparison")), "exp_multi_cmp", LANG,
                         titulo=t("multi.comparison_csv"), lado_a_lado=False)
     st.caption(t("export.multi_note"))

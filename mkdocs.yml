@@ -5,15 +5,51 @@ repo_url: https://github.com/luq317/MangueTREE
 repo_name: luq317/MangueTREE
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  font:
+    text: Source Sans Pro
+    code: Source Code Pro
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
   palette:
-    primary: teal
-    accent: teal
+    primary: white
+    accent: green
+extra_css:
+  - stylesheets/manguetree.css
 nav:
-  - Home: index.md
-  - User guide: user-guide.md
-  - Data format: data-format.md
-  - Methods: methods.md
-  - Desktop installers: installers.md
+  - Início / Home: index.md
+  - Português:
+      - Manual: pt/index.md
+      - Para que serve: pt/01-para-que-serve.md
+      - Abrir o aplicativo: pt/02-abrir-o-app.md
+      - Montar a planilha: pt/03-montar-a-planilha.md
+      - Menu lateral e configurações: pt/04-menu-lateral.md
+      - Parcela única: pt/05-parcela-unica.md
+      - Múltiplas parcelas: pt/06-multiplas-parcelas.md
+      - Análise temporal: pt/07-temporal.md
+      - Colonização: pt/08-colonizacao.md
+      - Exportar e usar os resultados: pt/09-exportar-e-usar.md
+      - Problemas comuns: pt/10-problemas.md
+  - English:
+      - Manual: en/index.md
+      - What it is for: en/01-what-it-is-for.md
+      - Open the app: en/02-open-the-app.md
+      - Build the spreadsheet: en/03-build-the-spreadsheet.md
+      - Sidebar and settings: en/04-sidebar-and-settings.md
+      - Single plot: en/05-single-plot.md
+      - Multiple plots: en/06-multiple-plots.md
+      - Temporal analysis: en/07-temporal.md
+      - Colonization: en/08-colonization.md
+      - Export and use the results: en/09-export-and-use.md
+      - Troubleshooting: en/10-troubleshooting.md
+  - Reference:
+      - User guide: user-guide.md
+      - Data format: data-format.md
+      - Methods: methods.md
+      - Desktop installers: installers.md
 markdown_extensions:
   - tables
   - toc:

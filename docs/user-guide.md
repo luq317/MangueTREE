@@ -1,6 +1,6 @@
 # User guide
 
-This guide describes the MangueTREE app (version 1.2.0). For the engine as a library, see the Quick start in the [README](https://github.com/luq317/MangueTREE/blob/main/README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
+This guide describes the MangueTREE app (version 1.3.0). For the engine as a library, see the Quick start in the [README](https://github.com/luq317/MangueTREE/blob/main/README.md). The formulas are in [methods.md](methods.md) and the file layout in [data-format.md](data-format.md).
 
 ## Starting the app
 

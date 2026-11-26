@@ -1,0 +1,13 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MangueTREE">
+  <circle cx="32" cy="18" r="12" fill="#1F6B45"/>
+  <circle cx="21" cy="23" r="8" fill="#2E8B57"/>
+  <circle cx="43" cy="23" r="8" fill="#2E8B57"/>
+  <circle cx="32" cy="12" r="6" fill="#57B77E"/>
+  <rect x="29" y="26" width="6" height="15" rx="2.5" fill="#7B5230"/>
+  <path d="M32 41 V48 H21 V56" stroke="#2E8B57" stroke-width="2" fill="none"/>
+  <path d="M32 41 V45 H44 V56" stroke="#2E8B57" stroke-width="2" fill="none"/>
+  <path d="M32 44 V56" stroke="#2E8B57" stroke-width="2" fill="none"/>
+  <circle cx="21" cy="57" r="2.6" fill="#4C78A8"/>
+  <circle cx="44" cy="57" r="2.6" fill="#4C78A8"/>
+  <circle cx="32" cy="57" r="2.6" fill="#4C78A8"/>
+</svg>

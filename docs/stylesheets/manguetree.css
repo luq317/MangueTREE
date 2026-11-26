@@ -1,0 +1,28 @@
+/* MangueTREE look on the docs site: same palette and font as the app (.streamlit/config.toml) */
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #ffffff;
+  --md-primary-fg-color--light: #F4F7F5;
+  --md-primary-fg-color--dark: #F4F7F5;
+  --md-primary-bg-color: #1A2B22;
+  --md-primary-bg-color--light: #1F6B45;
+  --md-accent-fg-color: #2E8B57;
+  --md-typeset-a-color: #2E8B57;
+  --md-default-fg-color: #1A2B22;
+  --md-default-fg-color--light: #4a5d53;
+  --md-code-bg-color: #F4F7F5;
+}
+.md-header { box-shadow: 0 1px 0 #dfe8e2; }
+.md-header, .md-tabs { background-color: #ffffff; color: #1A2B22; }
+.md-tabs { border-bottom: 1px solid #dfe8e2; }
+.md-tabs__link { color: #4a5d53; opacity: 1; }
+.md-tabs__item--active .md-tabs__link, .md-tabs__link:hover { color: #2E8B57; }
+.md-header__button.md-logo img, .md-header__button.md-logo svg { height: 1.9rem; width: auto; }
+.md-nav__link--active, .md-nav__item .md-nav__link--active { color: #2E8B57; font-weight: 600; }
+.md-typeset h1, .md-typeset h2 { color: #1F4D3A; font-weight: 600; }
+.md-typeset h1 { border-bottom: 2px solid #2E8B57; padding-bottom: .3em; }
+.md-typeset img { border: 1px solid #dfe8e2; border-radius: 8px; }
+.md-typeset em:has(+ br), .md-typeset p > em:only-child { color: #5F726A; font-size: .8rem; }
+.md-typeset table:not([class]) th { background: #F4F7F5; color: #1F4D3A; }
+.md-footer-meta { background-color: #1F4D3A; }
+.md-footer { background-color: #1F4D3A; }

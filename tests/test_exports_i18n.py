@@ -56,7 +56,7 @@ def test_pdf_english_has_no_portuguese(pdf_en, tmp_path):
 
 def test_pdf_footer_citation(pdf_en, pdf_pt, tmp_path):
     en = _text(pdf_en, tmp_path)
-    assert "MangueTREE v1.2.0" in en and "Pereira LS et al. (2026)" in en
+    assert "MangueTREE v1.3.0" in en and "Pereira LS et al. (2026)" in en
     assert "github.com/luq317/MangueTREE" in en
     assert "linkedin" not in en.lower() and "@" not in en
     pt = _text(pdf_pt, tmp_path)
@@ -192,3 +192,23 @@ def test_wide_table_stays_portrait_and_shrinks(tmp_path):
     p = tmp_path / "w.pdf"; p.write_bytes(pdf)
     out = subprocess.run(["pdfinfo", str(p)], capture_output=True, text=True).stdout
     assert "595.276 x 841.89" in out                  # reports are always A4 portrait
+
+
+def test_file_names_pattern():
+    """Saved files are named <plot>[_<year>]_<what>, with no accents or spaces."""
+    from manguetree import nomes
+    assert nomes.slug("Altura e perfil") == "Altura-e-perfil"
+    assert nomes.slug("Relação <b>Altura × DAP</b>") == "Relacao-Altura-DAP"
+    assert nomes.lista_parcelas(["F2", "H2", "J2"]) == "F2-H2-J2"
+    assert nomes.lista_parcelas(list("ABCDEFG"), "pt") == "7-parcelas"
+    assert nomes.lista_parcelas(list("ABCDEFG"), "en") == "7-plots"
+    assert nomes.arquivo("x") == "x"                        # no prefix outside a session
+
+
+def test_file_name_locale_keys_pair():
+    from manguetree import i18n
+    for k in ("file.figures", "file.report", "file.panel", "file.tables", "file.tables_evol",
+              "file.tables_mort", "file.colonization"):
+        for lang in ("pt", "en"):
+            v = i18n.t(k, lang)
+            assert v and v != k and "." not in v and " " not in v, (k, lang, v)

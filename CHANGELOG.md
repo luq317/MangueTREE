@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-26
+
+### Added
+
+- Manual on the documentation site in Portuguese and English (10 pages each: what the app is for, opening it, building the spreadsheet, sidebar and settings, single plot, multiple plots, temporal, colonization, export and use of the results, troubleshooting), illustrated with screenshots of the app (`docs/images/manual/`).
+
+### Changed
+
+- Documentation site with the MangueTREE look: app logo and favicon, the same green palette and font as the app (`docs/stylesheets/manguetree.css`).
+- Saved files now have organised names: `<plot>[_<year>]_<what>.<ext>`, with no accents or spaces (for example `H2_Height-and-profile.png`, `H2_Tables.xlsx`, `H2_Report.pdf`, `H2_Figures.zip`). This covers the camera button of every chart, the chart tables, the tables and PDF of each page, the summary panel and the ZIP of figures; several plots list the plots (`F2-H2-J2_...`) and the temporal analysis adds the years (`H2_2003-2025_...`).
+
 ## [1.2.0] - 2026-11-24
 
 ### Changed (home and colonization layout)
