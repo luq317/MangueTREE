@@ -47,7 +47,8 @@ def _bar(value, vmax, width, color, height=9, label=None, font="LiberationSans")
 
 
 def _class_labels(lang):
-    f = lambda v: fm.fmt_br(v, 1, lang).replace(",0", "").replace(".0", "")
+    # 2.5 -> "2,5" (pt) / "2.5" (en); 5.0 -> "5" (whole numbers lose the decimals)
+    f = lambda v: f"{float(v):g}".replace(".", "," if lang == "pt" else ".")
     out = [("< " + f(EDGES[0]))]
     out += [f"{f(a)} a {f(b)}" if lang == "pt" else f"{f(a)} to {f(b)}" for a, b in zip(EDGES, EDGES[1:])]
     out.append("≥ " + f(EDGES[-1]))

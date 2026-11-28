@@ -436,7 +436,7 @@ def _paineis(df, colunas, x, kind, lang, seal, por_figura=4, cmap=None):
                 if len(xs) <= 8:
                     for b, v in zip(bars, vals):
                         if np.isfinite(v):
-                            ax.text(b.get_x() + b.get_width() / 2, v, _cell_text(float(v), lang) if abs(v) < 100 else f"{v:,.0f}".replace(",", "."),
+                            ax.text(b.get_x() + b.get_width() / 2, v, _cell_text(float(v), lang) if abs(v) < 100 else (f"{v:,.0f}".replace(",", ".") if lang == "pt" else f"{v:,.0f}"),
                                     ha="center", va="bottom", fontsize=6.8, color="#4A5560")
                     ax.set_ylim(0, np.nanmax(vals) * 1.2 if np.isfinite(vals).any() and np.nanmax(vals) > 0 else 1)
                 if len(xs) > 5:
@@ -930,6 +930,7 @@ def _gerar(titulo, subtitulo, blocos, lang, seal, kpis=None, resumo=None, kicker
     n_h = n_fig = n_tab = 0
     pend = None
     fig_word, tab_word = T("report.figure"), T("report.table")
+    secao = ""
 
     def _legenda(n, palavra, texto):
         t_ = f"<b>{xml_escape(palavra)} {n}.</b>" + (f" {xml_escape(texto)}" if texto else "")
@@ -940,6 +941,7 @@ def _gerar(titulo, subtitulo, blocos, lang, seal, kpis=None, resumo=None, kicker
         if tipo not in ("h", "fig", "img", "pair", "flow", "sp"):
             pend = None
         if tipo == "h":
+            secao = b[1]
             n_h += 1
             flow.append(CondPageBreak(4.5 * cm))
             flow.append(_titulo_secao(f"{n_h}. {b[1]}", ss, width))
@@ -951,15 +953,15 @@ def _gerar(titulo, subtitulo, blocos, lang, seal, kpis=None, resumo=None, kicker
         elif tipo == "tab":
             if b[1] is not None and not b[1].empty:
                 tabela = _tabela_rl(b[1], ss, lang, width, **(b[3] if len(b) > 3 else {}))
-                if len(b) > 2 and b[2]:
-                    n_tab += 1
-                    cap = Paragraph(f"<b>{xml_escape(tab_word)} {n_tab}.</b> {xml_escape(b[2])}", ss["CapTab"])
-                    if len(b[1]) < 12:
-                        flow.append(KeepTogether([cap, tabela]))
-                    else:
-                        flow += [cap, tabela]
+                # every table has a number and a caption (above it); one without a caption of
+                # its own takes the title of its section ("secao" is already escaped)
+                n_tab += 1
+                texto = xml_escape(b[2]) if len(b) > 2 and b[2] else secao
+                cap = Paragraph(f"<b>{xml_escape(tab_word)} {n_tab}.</b> {texto}", ss["CapTab"])
+                if len(b[1]) < 12:
+                    flow.append(KeepTogether([cap, tabela]))
                 else:
-                    flow.append(tabela)
+                    flow += [cap, tabela]
                 flow.append(Spacer(1, 9))
         elif tipo == "fig" and b[1] is not None:
             fig = b[1]
@@ -1030,7 +1032,7 @@ def _bloco_verificacao(issues_df, lang):
     return [("h", h),
             ("cap", T("report.verification.summary", errors=n_err, warnings=n_warn,
                       sheet=T("sheet.issues"))),
-            ("tab", tabela)]
+            ("tab", tabela, i18n.t("report.tab.verification", lang))]
 
 
 def _num(v, lang, dec=1):
@@ -1085,13 +1087,13 @@ def _painel_especies(res, lang):
     sp = mc.species_parameters(res).sort_values("ba_total_ha", ascending=False)
     tot_ba = float(sp["ba_total_ha"].sum()) or 1.0
     rows = [{T("report.panel.col_sp"): (T("labels.unidentified") if r["species"] == mc.UNIDENTIFIED_LABEL else str(r["species"])),
-             "DeR (%)": fm.fmt_br(r["rel_density"], 2, lang),
+             T("labels.rel_density"): fm.fmt_br(r["rel_density"], 2, lang),
              T("report.panel.ba_live"): fm.fmt_br(r["ba_live_ha"], 2, lang),
              T("report.panel.ba_dead"): fm.fmt_br(r["ba_dead_ha"], 2, lang)} for _, r in sp.iterrows()]
     vals = [float(v) / tot_ba * 100 for v in sp["ba_total_ha"]]
     cols = [th.species_color(x) for x in sp["species"]]
     rows.append({T("report.panel.col_sp"): T("report.panel.mort_row"),
-                 "DeR (%)": f"{fm.fmt_br(s['mortality_stems_pct'], 2, lang)}% {T('report.panel.tr_abbr')}",
+                 T("labels.rel_density"): f"{fm.fmt_br(s['mortality_stems_pct'], 2, lang)}% {T('report.panel.tr_abbr')}",
                  T("report.panel.ba_live"): "-",
                  T("report.panel.ba_dead"): f"{fm.fmt_br(s['ba_dead_ha'], 2, lang)} ({fm.fmt_br(s['mortality_ba_pct'], 1, lang)}%)"})
     vals.append(float(s["mortality_ba_pct"])); cols.append(th.AMBER)
@@ -1135,10 +1137,10 @@ def _leitura_single(res, lang):
     s = res["summary"]; ic = res.get("complexity", {}).get("dbh_gt_2.5", {}).get("ci")
     f1 = lambda v: fm.fmt_br(v, 1, lang)
     f2 = lambda v: fm.fmt_br(v, 2, lang)
-    txt = xml_escape(T("report.read.single", plot=str(res.get("plot_name") or ""), area=fm.fmt_br(s["plot_area_m2"], 0, lang),
-                       dens=fm.fmt_br(s["density_live_ha"], 0, lang), ba=f2(s["ba_live_ha"]), ba_tot=f2(s["ba_total_ha"]),
+    txt = xml_escape(T("report.read.single", plot=str(res.get("plot_name") or ""), area=fm.fmt_br(s["plot_area_m2"], 2, lang),
+                       dens=fm.fmt_br(s["density_live_ha"], 2, lang), ba=f2(s["ba_live_ha"]), ba_tot=f2(s["ba_total_ha"]),
                        n_sp=int(s["n_species_live"]), dbh=f2(s["mean_dbh_cm"]), h=f2(s["height_mean_m"]),
-                       can=f2(s["canopy_height_m"]), ic=f2(ic)))
+                       can=f2(s["canopy_height_m"]), ic=f2(ic), u=_un.altura_unidade()))
     sp = mc.species_parameters(res)
     live = sp[sp["n_live"] > 0]
     if len(live):
@@ -1168,19 +1170,23 @@ def single_plot_report(res, lang="en", seal=False, figures=None, panel_png=None,
     tc, cnt, mx = _classes_dap(res, lang)
     tsp, vals, cols, _sp_list = _painel_especies(res, lang)
     b = [("h", H("panel_title")),
-         ("tab", tc, None, dict(bold_first=False, bars=[(T("report.panel.col_freq"), [float(c) for c in cnt], max(float(cnt.max()), 1.0), th.NAVY)])),
+         ("tab", tc, T("report.tab.dbh_classes"), dict(bold_first=False, bars=[(T("report.panel.col_freq"), [float(c) for c in cnt], max(float(cnt.max()), 1.0), th.NAVY)])),
          ("sp", 6),
-         ("tab", tsp, None, dict(species_first=True, bars=[(T("report.panel.col_abshare"), vals, 100.0, cols)]))]
+         ("tab", tsp, T("report.tab.species_panel"), dict(species_first=True, bars=[(T("report.panel.col_abshare"), vals, 100.0, cols)]))]
     # 2. structural summary
-    b += [("h", H("structural_full")), ("tab", _estrutural_2col(res, lang), None, dict(bold_cols=(1, 3), bold_first=False)),
+    b += [("h", H("structural_full")), ("tab", _estrutural_2col(res, lang), T("report.tab.structural"), dict(bold_cols=(1, 3), bold_first=False)),
           ("cap", T("method.heights_live_only"))]
     # 3. species and phytosociology
-    imp = ui.for_display(res["importance"], lang=lang)
     imp_df = res["importance"]
+    # the per-hectare columns are in the species table above: drop them by column, not by the
+    # Portuguese text of their names (which left them in the English report)
+    imp = ui.for_display(imp_df.drop(columns=[c for c in imp_df.columns
+                                              if c.endswith("_ha") or c.startswith("density")]),
+                         lang=lang)
     dor = [float(v) for v in imp_df["rel_dominance"]]
-    b += [("h", H("species_phyto")), ("tab", ui.tabela_por_especie(res, lang), None, dict(species_first=True)),
+    b += [("h", H("species_phyto")), ("tab", ui.tabela_por_especie(res, lang), T("report.tab.by_species"), dict(species_first=True)),
           ("sp", 8),
-          ("tab", imp.drop(columns=[c for c in imp.columns if "(troncos/ha)" in c or "m²/ha" in c]), None,
+          ("tab", imp, T("report.tab.phyto"),
            dict(species_first=True, bars=[(T("report.panel.dor_col"), dor, 100.0, [th.species_color(x) for x in imp_df["species"]])])),
           ("cap", T("report.note.single_ivi"))]
     # 4. charts
@@ -1208,12 +1214,12 @@ def single_plot_report(res, lang="en", seal=False, figures=None, panel_png=None,
              T("report.kpi.sub.stems_tree", stems=fm.fmt_br(s["n_live"], 0, lang), spt=f2(s["stems_per_tree"]))),
             (T("report.kpi.height_canopy"), f"{f2(s['height_mean_m'])} ± {f2(s['height_sd_m'])}", _un.altura_unidade(),
              T("report.kpi.sub.canopy", canopy=f2(s["canopy_height_m"]), max=f2(s["height_max_m"]), u=_un.altura_unidade())),
-            (T("report.kpi.density_live"), fm.fmt_br(s["density_live_ha"], 0, lang), "tr/ha" if lang == "pt" else "st./ha",
+            (T("report.kpi.density_live"), fm.fmt_br(s["density_live_ha"], 2, lang), "tr/ha" if lang == "pt" else "st./ha",
              T("report.kpi.sub.mort", m=fm.fmt_br(s["mortality_stems_pct"], 1, lang))),
             (T("report.kpi.ba_total"), f2(s["ba_total_ha"]), "m²/ha",
              T("report.kpi.sub.ba", live=f2(s["ba_live_ha"]), dead=f2(s["ba_dead_ha"])))]
     data = datetime.now().strftime("%d/%m/%Y %H:%M" if lang == "pt" else "%Y-%m-%d %H:%M")
-    meta = T("report.meta.single", area=fm.fmt_br(s["plot_area_m2"], 0, lang), species=int(s["n_species_live"]),
+    meta = T("report.meta.single", area=fm.fmt_br(s["plot_area_m2"], 2, lang), species=int(s["n_species_live"]),
              stems=fm.fmt_br(s["n_live"], 0, lang), ind=fm.fmt_br(s["n_live_trees"], 0, lang), date=data)
     return _gerar(T("report.title.single_plot", plot=plot), plot, b, lang, seal, kpis=kpis,
                   resumo=_leitura_single(res, lang), kicker=f"{marca.APP_NOME} · {T('report.kicker.single')}",
@@ -1229,19 +1235,20 @@ def _resumo_multi(df_param, ivi, lang):
     ba_p = d["ba_live_ha"].astype(float).idxmax(); h_p = d["height_mean_m"].astype(float).idxmax()
     m_p = d["mortality_stems_pct"].astype(float).idxmax()
     if ba_p == h_p:                  # the same plot leads two indicators: one sentence
-        txt = xml_escape(T("report.sum.multi_same", lo_plot=lo, lo=_num(lov, lang, 0), hi_plot=hi,
-                           hi=_num(hiv, lang, 0), plot=ba_p, ba=_num(d.loc[ba_p, "ba_live_ha"], lang),
+        txt = xml_escape(T("report.sum.multi_same", lo_plot=lo, lo=_num(lov, lang, 2), hi_plot=hi,
+                           hi=_num(hiv, lang, 2), plot=ba_p, ba=_num(d.loc[ba_p, "ba_live_ha"], lang),
                            h=_num(d.loc[h_p, "height_mean_m"], lang), m_plot=m_p,
-                           m=_num(d.loc[m_p, "mortality_stems_pct"], lang)))
+                           m=_num(d.loc[m_p, "mortality_stems_pct"], lang), u=_un.altura_unidade()))
         if ivi is not None and not ivi.empty and "ivi" in ivi.columns:
             top = ivi.sort_values("ivi").iloc[-1]
             txt += " " + T("report.sum.single_top", species=f"<i>{xml_escape(str(top['species']))}</i>",
                            ivi=_num(top["ivi"], lang))
         return txt
-    txt = xml_escape(T("report.sum.multi", lo_plot=lo, lo=_num(lov, lang, 0), hi_plot=hi, hi=_num(hiv, lang, 0),
+    txt = xml_escape(T("report.sum.multi", lo_plot=lo, lo=_num(lov, lang, 2), hi_plot=hi, hi=_num(hiv, lang, 2),
                        ba_plot=ba_p, ba=_num(d.loc[ba_p, "ba_live_ha"], lang), h_plot=h_p,
                        h=_num(d.loc[h_p, "height_mean_m"], lang),
-                       m_plot=m_p, m=_num(d.loc[m_p, "mortality_stems_pct"], lang)))
+                       m_plot=m_p, m=_num(d.loc[m_p, "mortality_stems_pct"], lang),
+                       u=_un.altura_unidade()))
     if ivi is not None and not ivi.empty and "ivi" in ivi.columns:
         top = ivi.sort_values("ivi").iloc[-1]
         txt += " " + T("report.sum.single_top", species=f"<i>{xml_escape(str(top['species']))}</i>",
@@ -1269,7 +1276,7 @@ def _tabela_indicadores(df_param, lang):
     d = pd.DataFrame({ui.label("plot", lang): df_param["plot"].astype(str).values})
     for c in cols:
         v = df_param[c].astype(float)
-        d[ui.label(c, lang)] = [fm.fmt_br(x, 0 if c in ("plot_area_m2", "density_live_ha") else 1, lang) for x in v]
+        d[ui.label(c, lang)] = [fm.fmt_br(x, 2, lang) for x in v]
     ba = df_param["ba_live_ha"].astype(float).values if "ba_live_ha" in df_param.columns else None
     return d, ba
 
@@ -1309,16 +1316,16 @@ def multiple_plots_report(resultados, df_param, ivi, df_especies, issues_df=None
         tab, ba = _tabela_indicadores(df_param, lang)
         bars = ([(T("report.col.ba_bar"), [float(x) for x in ba], max(float(ba.max()), 1e-9), th.NAVY)]
                 if ba is not None else [])
-        b += [("h", H("indicators_by_plot")), ("tab", tab, None, dict(bars=bars)),
+        b += [("h", H("indicators_by_plot")), ("tab", tab, T("report.tab.indicators"), dict(bars=bars)),
               ("cap", T("report.note.indicators"))]
     except Exception:
         shown = ui.for_display(df_param, lang=lang)
-        b += [("h", H("comparison")), ("tab", shown.round(2))]
+        b += [("h", H("comparison")), ("tab", shown.round(2), T("report.tab.comparison"))]
     if ivi is not None and not ivi.empty and "ivi" in ivi.columns:
         iv = ivi.sort_values("ivi", ascending=False).reset_index(drop=True)
         b += [("h", H("ivi_set")),
-              ("tab", _tabela_ivi(iv, lang), None,
-               dict(species_first=True, bars=[(T("report.col.ivi_bar", max=fm.fmt_br(float(iv["ivi"].max()), 0, lang)),
+              ("tab", _tabela_ivi(iv, lang), T("report.tab.ivi_set"),
+               dict(species_first=True, bars=[(T("report.col.ivi_bar", max=fm.fmt_br(float(iv["ivi"].max()), 2, lang)),
                                                 [float(x) for x in iv["ivi"]], float(iv["ivi"].max()),
                                                 [th.species_color(x) for x in iv["species"]])]))]
     cols = [c for c in mc.metric_columns(df_param) if str(c).isidentifier()]
@@ -1334,7 +1341,7 @@ def multiple_plots_report(resultados, df_param, ivi, df_especies, issues_df=None
               ("h", H("species_contribution")), ("fig", _fig_especies_parcelas(df_especies, lang, seal)),
               ("h", H("ivi")), ("fig", _fig_ivi(ivi, lang, seal))]
     try:
-        b += [("h", H("complementary")), ("tab", _matriz_complementar(resultados, df_param, lang)),
+        b += [("h", H("complementary")), ("tab", _matriz_complementar(resultados, df_param, lang), T("report.tab.complementary")),
               ("cap", T("report.note.complementary"))]
     except Exception:
         pass
@@ -1344,8 +1351,8 @@ def multiple_plots_report(resultados, df_param, ivi, df_especies, issues_df=None
     b += _bloco_verificacao(issues_df, lang)
     nomes = [str(p) for p in df_param["plot"]] if "plot" in df_param.columns else []
     has_area = "plot_area_m2" in df_param.columns
-    areas = ", ".join(fm.fmt_br(float(a), 0, lang) for a in df_param["plot_area_m2"]) if has_area else ""
-    area_tot = fm.fmt_br(df_param["plot_area_m2"].astype(float).sum(), 0, lang) if has_area else "-"
+    areas = ", ".join(fm.fmt_br(float(a), 2, lang) for a in df_param["plot_area_m2"]) if has_area else ""
+    area_tot = fm.fmt_br(df_param["plot_area_m2"].astype(float).sum(), 2, lang) if has_area else "-"
     try:
         especies = [str(x) for x in ivi.sort_values("ivi", ascending=False)["species"]] if ivi is not None else []
         kpis = [(T("report.kpi.plots"), str(len(resultados)), "", xml_escape(", ".join(nomes))),
@@ -1388,7 +1395,7 @@ def _tabela_serie(s, lang):
     from manguetree.reports import formatting as fm
     cols = [c for c in mc.metric_columns(s) if str(c).isidentifier() and c in s.columns
             and s[c].astype(float).nunique() > 1]
-    dec = lambda c: 0 if ("density" in c or c.startswith("n_")) else 2
+    dec = lambda c: 0 if c.startswith("n_") else 2          # counts whole, results 00,00
     out = {ui.label("year", lang): [str(int(y)) for y in s["year"]]}
     for c in cols:
         v = s[c].astype(float)
@@ -1401,15 +1408,21 @@ def _tabela_serie(s, lang):
     return pd.concat([d, pd.DataFrame([last])], ignore_index=True)
 
 
-def temporal_report(df_serie, df_esp, issues_df=None, lang="en", seal=False, figures=None):
+def temporal_report(df_serie, df_esp, issues_df=None, lang="en", seal=False, figures=None,
+                    plots=None):
+    """Temporal report. ``plots``: names of the plots of the series (written under the title;
+    with more than one, ``df_serie`` is their mean per year and the report says so)."""
     from manguetree import charts as ui
     from manguetree.reports import formatting as fm
     T = _T(lang)
     H = lambda k: xml_escape(T(f"report.h.{k}"))
+    plots = [str(p) for p in (plots or [])]
     s = df_serie.sort_values("year").reset_index(drop=True)
     cols = [c for c in mc.metric_columns(df_serie)]
-    b = [("h", H("series_summary")), ("cap", T("report.note.series")),
-         ("tab", _tabela_serie(s, lang), None, dict(bold_last_row=True))]
+    b = [("h", H("series_summary")), ("cap", T("report.note.series"))]
+    if len(plots) > 1:
+        b.append(("cap", T("report.note.temporal_mean", n=len(plots), plots=", ".join(plots))))
+    b.append(("tab", _tabela_serie(s, lang), T("report.tab.series"), dict(bold_last_row=True)))
     figures = _sem_duplicados(figures, set(cols), "mortality_stems_pct" in cols)
     cols = [c for c in cols if c in s.columns and pd.to_numeric(s[c], errors="coerce").nunique() > 1]
     app = _imagens_do_app(figures, H("figures"), lang)
@@ -1439,50 +1452,147 @@ def temporal_report(df_serie, df_esp, issues_df=None, lang="en", seal=False, fig
         return (f"{label} ({y1})", fm.fmt_br(v1, dec, lang), unit, sub)
     kpis = [k for k in (kpi("mean_dbh_cm", T("report.kpi.dbh"), 2, "cm"),
                         kpi("canopy_height_m", T("report.kpi.canopy"), 2, _un.altura_unidade()),
-                        kpi("density_live_ha", T("report.kpi.density_live"), 0, "tr/ha" if lang == "pt" else "st./ha"),
+                        kpi("density_live_ha", T("report.kpi.density_live"), 2, "tr/ha" if lang == "pt" else "st./ha"),
                         kpi("ba_live_ha", T("report.kpi.ba_live"), 2, "m²/ha")) if k]
     def first_last(c):
-        return (_num(s[c].iloc[0], lang, 0 if "density" in c else 1), _num(s[c].iloc[-1], lang, 0 if "density" in c else 1)) if c in s.columns else ("-", "-")
+        return (_num(s[c].iloc[0], lang, 2), _num(s[c].iloc[-1], lang, 2)) if c in s.columns else ("-", "-")
     d0, d1 = first_last("density_live_ha"); b0, b1 = first_last("ba_live_ha"); m0, m1 = first_last("mean_dbh_cm")
     mort = _num(s["mortality_stems_pct"].iloc[-1], lang) if "mortality_stems_pct" in s.columns else "-"
     resumo = xml_escape(T("report.sum.temporal", y0=y0, y1=y1, n=len(s), d0=d0, d1=d1, b0=b0, b1=b1,
                           m0=m0, m1=m1, mort=mort))
     data = datetime.now().strftime("%d/%m/%Y %H:%M" if lang == "pt" else "%Y-%m-%d %H:%M")
     meta = T("report.meta.temporal", y0=y0, y1=y1, n=len(s), span=span, date=data)
-    return _gerar(T("report.title.temporal"), T("report.period", start=y0, end=y1), b, lang, seal,
+    periodo = T("report.period", start=y0, end=y1)
+    return _gerar(T("report.title.temporal"), (", ".join(plots) + " · " + periodo) if plots else periodo,
+                  b, lang, seal,
                   kpis=kpis, resumo=resumo, kicker=f"{marca.APP_NOME} · {T('report.kicker.temporal')}", meta=meta,
                   rodape=T("report.title.temporal"), leitura=T("report.reading.temporal"))
 
 
-def colonization_report(resumos, dens, lang="en", seal=False, figures=None):
+def _fig_colon_densidade(dens, lang, seal):
+    """Juvenile density by plot and year (drawn here when the app charts cannot be exported)."""
+    if dens is None or dens.empty:
+        return None
+    from manguetree.charts import label
+    fig, ax = plt.subplots(figsize=(6, 3.6))
+    for i, (p, s) in enumerate(dens.groupby("parcela", sort=True)):
+        s = s.sort_values("ano")
+        ax.plot(s["ano"], s["ind_ha"], marker="o", color=_PALETA[i % len(_PALETA)], label=str(p))
+    ax.set_xlabel(label("year", lang)); ax.set_ylabel("ind/ha")
+    ax.set_title(i18n.t("colon.chart.density_title", lang), fontweight="bold")
+    ax.legend(fontsize=8, ncol=min(5, dens["parcela"].nunique()))
+    fig.tight_layout()
+    return _carimbar(fig, seal)
+
+
+def _fig_colon_altura(alt, unidade, lang, seal):
+    """Mean juvenile height by plot and year, with one standard deviation (fallback figure)."""
+    if alt is None or alt.empty:
+        return None
+    from manguetree.charts import label
+    fig, ax = plt.subplots(figsize=(6, 3.6))
+    for i, (p, s) in enumerate(alt.groupby("parcela", sort=True)):
+        s = s.sort_values("ano")
+        ax.errorbar(s["ano"], s["media"], yerr=s["dp"].fillna(0), marker="o", capsize=2,
+                    color=_PALETA[i % len(_PALETA)], label=str(p))
+    ax.set_xlabel(label("year", lang)); ax.set_ylabel(i18n.t("colon.chart.height_axis", lang, u=unidade))
+    ax.set_title(i18n.t("report.h.colonization_height", lang, u=unidade), fontweight="bold")
+    ax.legend(fontsize=8, ncol=min(5, alt["parcela"].nunique()))
+    fig.tight_layout()
+    return _carimbar(fig, seal)
+
+
+def colonization_report(resumos, dens, lang="en", seal=False, figures=None, params=None,
+                        alturas=None, relativa=None, verificacao=None, unidade="m"):
     """Colonization dynamics report. ``resumos``: ``colonizacao.resumo`` of each plot;
-    ``dens``: juvenile density table (columns parcela, ano, ind_ha, n)."""
+    ``dens``: juvenile density table (columns parcela, ano, ind_ha, n); ``params``: the
+    analysis settings ({"versao": "com" | "sem", "areas": {plot: m2}, "unidas": {...},
+    "ocultar": bool}), written in the report so the numbers can be reproduced.
+    ``alturas``: ``estatistica_altura`` in ``unidade``; ``relativa``: ``densidade_relativa``;
+    ``verificacao``: one dict per plot with the counts of the check (see the page)."""
     T = _T(lang)
     H = lambda k: xml_escape(T(f"report.h.{k}"))
-    tab = pd.DataFrame({
+    params = params or {}
+    areas = params.get("areas") or {}
+    cols = {
         T("report.col.plot"): [r["parcela"] for r in resumos],
         T("report.col.file"): [r["arquivo"] for r in resumos],
         T("report.col.individuals"): [r["individuos"] for r in resumos],
         T("report.col.collections"): [r["blocos"] for r in resumos],
-        T("report.col.years"): [f"{r['anos'][0]} - {r['anos'][1]}" if r["anos"] else "-" for r in resumos]})
-    b = [("h", H("colonization_read")), ("tab", tab)]
+        T("report.col.years"): [T("colon.years_range", a=r["anos"][0], b=r["anos"][1])
+                                if r["anos"] else "-" for r in resumos]}
+    if areas:
+        cols[T("report.col.area_m2")] = [_num(areas.get(r["parcela"], float("nan")), lang, 2)
+                                         for r in resumos]
+    b = [("h", H("colonization_read")), ("tab", pd.DataFrame(cols), T("report.tab.colon_read"))]
+    if params:
+        unidas = params.get("unidas") or {}
+        linhas = [(T("colon.cfg.version"), T(f"colon.density.version_{params.get('versao', 'com')}")),
+                  (T("report.param.joined"), ", ".join(unidas) if unidas else T("report.param.none"))]
+        if unidas:
+            linhas.append((T("report.param.incomplete"),
+                           T("report.param.hidden" if params.get("ocultar") else "report.param.shown")))
+        b += [("h", H("colonization_params")),
+              ("tab", pd.DataFrame(linhas, columns=[T("report.col.setting"), T("report.col.value")]),
+               T("report.tab.colon_params"))]
+    if dens is not None and not dens.empty:
+        piv = dens.pivot_table(index="ano", columns="parcela", values="ind_ha", aggfunc="first")
+        tabd = piv.apply(lambda c: c.map(lambda v: _num(v, lang, 1) if pd.notna(v) else "-"))
+        tabd.insert(0, T("report.col.year"), [str(int(a)) for a in piv.index])
+        b += [("h", H("colonization_density")), ("tab", tabd.reset_index(drop=True), T("report.tab.colon_density"))]
+        cont = dens.pivot_table(index="ano", columns="parcela", values="n", aggfunc="first")
+        tabn = cont.apply(lambda c: c.map(lambda v: str(int(v)) if pd.notna(v) else "-"))
+        tabn.insert(0, T("report.col.year"), [str(int(a)) for a in cont.index])
+        b += [("tab", tabn.reset_index(drop=True), T("report.tab.colon_counts"))]
+    if relativa is not None and not relativa.empty:
+        # composition in the last year of each plot (or union) with juveniles
+        r = relativa[relativa["n"] > 0] if "n" in relativa.columns else relativa
+        ult = r.groupby("parcela")["ano"].transform("max")
+        r = r[r["ano"] == ult].sort_values(["parcela", "relativa"], ascending=[True, False])
+        from manguetree import colonizacao_charts as _cc
+        tabr = pd.DataFrame({
+            T("report.col.plot"): r["parcela"].astype(str), T("report.col.year"): r["ano"].astype(int).astype(str),
+            T("report.col.species"): [_cc.nome_especie(e, lang) for e in r["especie"]],
+            "ind/ha": [_num(v, lang, 2) for v in r["ind_ha"]],
+            T("report.col.relative_pct"): [_num(v, lang, 2) for v in r["relativa"]]})
+        b += [("h", H("colonization_species")), ("tab", tabr.reset_index(drop=True), T("report.tab.colon_species"))]
+    if alturas is not None and not alturas.empty:
+        piv = alturas.pivot_table(index="ano", columns="parcela", values="media", aggfunc="first")
+        taba = piv.apply(lambda c: c.map(lambda v: _num(v, lang, 2) if pd.notna(v) else "-"))
+        taba.insert(0, T("report.col.year"), [str(int(a)) for a in piv.index])
+        b += [("h", xml_escape(T("report.h.colonization_height", u=unidade))),
+              ("tab", taba.reset_index(drop=True), T("report.tab.colon_height", u=unidade))]
+    if verificacao:
+        chaves = ("sem_coorte", "coorte_posterior", "coorte_invalida", "altura", "sem_especie",
+                  "lacres_repetidos")
+        tabv = pd.DataFrame([[v["parcela"]] + [int(v.get(k, 0)) for k in chaves] for v in verificacao],
+                            columns=[T("report.col.plot")] + [T(f"report.col.chk_{k}") for k in chaves])
+        b += [("h", H("colonization_check")), ("cap", T("report.note.colon_check")),
+              ("tab", tabv, T("report.tab.colon_check"))]
     figures = _sem_duplicados([f for f in (figures or []) if f.get("key") != "colon_schema_obs"])
     app = _imagens_do_app(figures, H("figures"), lang)
     if app:
         b += app
+    else:                                     # no Chrome/kaleido: figures drawn here
+        figs_ = [f for f in (_fig_colon_densidade(dens, lang, seal),
+                             _fig_colon_altura(alturas, unidade, lang, seal)) if f is not None]
+        if figs_:
+            b += [("h", H("figures"))] + [("fig", f) for f in figs_]
     n_ind = int(sum(r["individuos"] for r in resumos))
     n_col = int(sum(r["blocos"] for r in resumos))
     anos = [a for r in resumos if r["anos"] for a in r["anos"]]
     kpis, resumo = [], None
     try:
-        d = dens["ind_ha"].astype(float)
+        d = dens.dropna(subset=["ind_ha"])
+        top = d.loc[d["ind_ha"].astype(float).idxmax()]
         kpis = [(T("report.kpi.col_plots"), str(len(resumos))), (T("report.kpi.col_collections"), str(n_col)),
                 (T("report.kpi.col_individuals"), _num(n_ind, lang, 0)),
-                (T("report.kpi.col_density"), _num(d.mean(), lang, 0))]
+                (T("report.kpi.col_density"), _num(top["ind_ha"], lang, 2))]
         resumo = xml_escape(T("report.sum.colonization", plots=len(resumos), collections=n_col,
                               individuals=_num(n_ind, lang, 0), y0=min(anos) if anos else "-",
-                              y1=max(anos) if anos else "-", density=_num(d.mean(), lang, 0),
-                              dmin=_num(d.min(), lang, 0), dmax=_num(d.max(), lang, 0)))
+                              y1=max(anos) if anos else "-",
+                              dmin=_num(d["ind_ha"].min(), lang, 2), dmax=_num(top["ind_ha"], lang, 2),
+                              plot=top["parcela"], year=int(top["ano"])))
     except Exception:
         pass
     return _gerar(T("report.title.colonization"), T("report.plots_count", n=len(resumos)), b, lang, seal,

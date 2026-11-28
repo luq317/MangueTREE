@@ -150,8 +150,13 @@ def test_year_can_be_corrected(tmp_path):
 
 def test_plot_letter_comes_from_the_file_name(tmp_path):
     path = _workbook(tmp_path / "planilha qualquer.xlsx")
-    with pytest.raises(ValueError):
+    assert col.le_parcela(path).parcela == "K"           # the only one-letter sheet
+    wb = openpyxl.load_workbook(path)
+    wb.create_sheet("L")                                 # two letter sheets: no guess
+    wb.save(path)
+    with pytest.raises(col.ErroLeitura) as e:
         col.le_parcela(path)
+    assert e.value.codigo == "sem_letra"
     assert col.le_parcela(path, parcela="K").parcela == "K"
 
 
@@ -396,10 +401,10 @@ def test_page_export_tab_and_reclassify(tmp_path):
     at.selectbox(key="colon_rc_cls_K_X").set_value("jovem")
     at.button(key="colon_rc_ok_K").click().run()
     assert not at.exception
-    density = _density_table(at)
-    assert density["K"].round(1).tolist() == [round(4 / 0.006, 1), round(3 / 0.006, 1)]
+    density = _density_table(at)      # default version "All": X of 103 in 2006 is now a J
+    assert density["K"].round(1).tolist() == [round(6 / 0.006, 1), round(5 / 0.006, 1)]
     at.button(key="colon_rc_clear_K").click().run()
-    assert _density_table(at)["K"].round(1).tolist() == [round(4 / 0.006, 1), round(2 / 0.006, 1)]
+    assert _density_table(at)["K"].round(1).tolist() == [round(6 / 0.006, 1), round(4 / 0.006, 1)]
     at.radio(key="colon_formato").set_value("largo").run()
     assert not at.exception
 
@@ -444,8 +449,10 @@ def test_page_shows_the_check_and_the_density(tmp_path):
     summary = _df_with(at, "Plot", "Individuals")
     assert summary["Plot"].tolist() == ["K"] and summary["Individuals"].tolist() == [7]
     assert summary["Repeated tags"].tolist() == [1] and summary["No cohort"].tolist() == [1]
-    density = _density_table(at)
-    assert density["K"].round(1).tolist() == [round(4 / 0.006, 1), round(2 / 0.006, 1)]
+    density = _density_table(at)      # default version "All": 6 juveniles in 2005, 4 in 2006
+    assert density["K"].round(1).tolist() == [round(6 / 0.006, 1), round(4 / 0.006, 1)]
+    at.radio(key="colon_versao").set_value("sem").run()
+    assert _density_table(at)["K"].round(1).tolist() == [round(4 / 0.006, 1), round(2 / 0.006, 1)]
 
 
 def test_page_year_correction_can_be_applied_and_undone(tmp_path):
@@ -501,8 +508,8 @@ def test_results_wait_for_the_run_button(tmp_path):
 
 def test_version_label_has_no_citation_in_parentheses(tmp_path):
     at = _page_with_upload(tmp_path, run=False)
-    assert at.radio(key="colon_versao").options == ["Only individuals with a cohort",
-                                                    "Including individuals without a cohort"]
+    assert at.radio(key="colon_versao").options == ["All (with and without a cohort)",
+                                                    "Only individuals with a cohort"]
 
 
 def test_join_groups_are_free_and_disjoint():
@@ -625,7 +632,7 @@ def test_page_joined_plots_apply_to_every_tab(tmp_path):
     assert not at.exception
     dens = next(d.value for d in at.dataframe
                 if list(d.value.columns) == ["K+L"] and d.value["K+L"].dtype.kind == "f")
-    assert dens["K+L"].round(1).tolist() == [round(8 / 0.012, 1), round(4 / 0.012, 1)]
+    assert dens["K+L"].round(1).tolist() == [round(12 / 0.012, 1), round(8 / 0.012, 1)]
     assert any("K+L" in c.value for c in at.caption)
 
 

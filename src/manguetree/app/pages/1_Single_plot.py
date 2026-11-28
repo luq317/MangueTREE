@@ -15,6 +15,7 @@
 Single plot analysis (MangueTREE): structural and phytosociological parameters of
 one plot. All visible text comes from the catalogs (manguetree/locales).
 """
+import re
 import streamlit as st
 import pandas as pd
 
@@ -45,7 +46,10 @@ if uploaded and uploaded.name.lower().endswith(".xlsx"):
     except Exception as e:
         st.error(t("single.read_error", error=str(e)))
         st.stop()
+    # the template's instructions sheet is never a plot
+    sheet_names = [s for s in sheet_names if not ui.is_help_sheet(s)] or sheet_names
     sheet_count = len(sheet_names)
+    sheet = sheet_names[0]
     if sheet_count > 1:
         sheet = st.sidebar.selectbox(t("single.sheet"), sheet_names,
                                      key=f"sheet_unica_{uploaded.name}_{uploaded.size}")
@@ -109,8 +113,13 @@ except Exception as e:
     st.error(t("single.read_error", error=str(e)))
     st.stop()
 
+if df is None:
+    st.error(t("single.no_header", names=mio.accepted_names(), rows=mio._HEADER_SCAN_ROWS))
+    st.stop()
 if not mio.has_required_columns(df):
-    st.error(t("single.missing_columns"))
+    st.error(t("single.missing_columns_detail",
+               missing=", ".join(ui.label(c, LANG) for c in mio.missing_columns(df)),
+               names=mio.accepted_names(mio.missing_columns(df)), rows=mio._HEADER_SCAN_ROWS))
     st.stop()
 
 if df.empty:
@@ -118,11 +127,22 @@ if df.empty:
     st.stop()
 
 # Linhas sem DAP seguem para a validação (o cálculo ignora DAP ausente ou <= 0).
-n_validos = int((df["dbh"] > 0).sum())
-st.success(t("single.processed", n=n_validos, rows=len(df), area=float(area_final)))
-plot_name = str(sheet) if sheet_count > 1 else uploaded.name.rsplit(".", 1)[0]
+# The plot is named after the file, unless the workbook holds one plot per sheet. A sheet
+# named "Dados"/"Data" (template), "Sheet1" or a year (one survey per sheet) names no plot.
+_stem = uploaded.name.rsplit(".", 1)[0]
+_ano_aba = str(sheet) if re.fullmatch(r"(19|20)\d\d", str(sheet).strip()) else ""
+if sheet_count > 1 and not ui.is_generic_sheet(sheet):
+    plot_name = str(sheet)
+else:
+    plot_name = f"{_stem} ({_ano_aba})" if _ano_aba else _stem
 st.caption(t("single.plot_label", name=plot_name))
-nomes.definir(plot_name, st.session_state.get("ano_painel", "").strip())     # file names: H2_2009_...
+# the year typed in the summary panel belongs to the plot it was typed for: one field per
+# file and sheet (deleting the key alone left the old year on screen)
+import hashlib as _hl
+_KANO = "ano_painel_" + _hl.md5(repr((getattr(uploaded, "file_id", uploaded.name),
+                                       str(sheet))).encode()).hexdigest()[:10]
+nomes.definir(_stem if _ano_aba else plot_name,
+              st.session_state.get(_KANO, "").strip() or _ano_aba)     # file names: H2_2009_...
 ui.batch_png_button(_slot_lote, _dpi_lote)
 # the panel validates with the same choice for stems without condition as the analysis
 cond_faltante = st.session_state.get("mc_unica", "exclude")
@@ -133,6 +153,11 @@ res = mc.analyze(df, area_final, RESOLVER, dbh_limits=limites,
                  class_width=largura_classe, missing_condition=cond_faltante)
 res = ui.na_unidade(res)           # heights in the unit chosen in the sidebar (m or cm)
 r = res["summary"]
+if r["n_stems"] == 0:              # nothing left to calculate: show why instead of empty charts
+    st.error(t("single.no_valid_stems"))
+    st.dataframe(ui.issues_frame_by_unit(issues_unica, None, LANG), hide_index=True, width="stretch")
+    st.stop()
+st.success(t("single.processed", n=r["n_stems"], rows=len(df), area=float(area_final)))
 
 # ---------------- DASHBOARD ----------------
 N = lambda value, decimals: ui.num(value, decimals, LANG)      # decimal comma in Portuguese
@@ -148,7 +173,7 @@ with tab_panel:
         tema = st.radio(t("dashboard.theme"), ("light", "dark"), horizontal=True, key="tema_painel",
                         format_func=lambda k: t(f"dashboard.theme.{k}"))
     with cp2:
-        ano_p = st.text_input(t("dashboard.year"), "", key="ano_painel")
+        ano_p = st.text_input(t("dashboard.year"), "", key=_KANO)
     with cp3:
         dpi_p = st.select_slider(t("dashboard.dpi"), (150, 200, 300, 450, 600), value=300, key="dpi_painel")
     partes = ([t("dashboard.data_of", year=ano_p.strip())] if ano_p.strip() else []) + [

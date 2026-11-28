@@ -36,9 +36,13 @@ ESPECIES = {"Av": "Avicennia schaueriana", "Lg": "Laguncularia racemosa",
             "Rh": "Rhizophora mangle"}
 
 
-def nome_especie(codigo):
-    """Scientific name of a workbook species code (other labels are returned unchanged)."""
-    return ESPECIES.get(str(codigo).strip().capitalize(), str(codigo) or "?")
+def nome_especie(codigo, lang=None):
+    """Scientific name of a workbook species code; blank and "?" are the individuals without
+    species (one translated label); other labels are returned unchanged."""
+    c = str(codigo).strip().capitalize()
+    if c in ("", "?"):
+        return i18n.t("colon.species.none", lang)
+    return ESPECIES.get(c, str(codigo))
 
 
 def _anos(fig, anos):
@@ -153,7 +157,7 @@ def fig_composicao(rel, estilos, parcela, relativa=True, lang=None):
     T = i18n.t
     sub = rel[rel["parcela"] == parcela]
     y = "relativa" if relativa else "ind_ha"
-    nomes = {e: nome_especie(e) for e in sub["especie"].unique()}
+    nomes = {e: nome_especie(e, lang) for e in sub["especie"].unique()}
     cores = ui.species_colors(list(nomes.values()))
     anos = sorted(sub["ano"].unique())
     inc = set(sub.loc[_incompleta(sub), "ano"].astype(int)) if len(sub) else set()
@@ -179,21 +183,21 @@ def fig_composicao(rel, estilos, parcela, relativa=True, lang=None):
 def fig_altura(est, estilos, lang=None, tipo="line_sd"):
     """Height (cm, or m when so chosen: ``est`` is already converted) of juveniles, per plot
     (and species or class, when the table has those columns). ``est`` is the table of
-    ``estatistica_altura``. ``tipo``: line, markers, bar, hbar, line_sd, markers_sd or bar_sd
-    (the *_sd types add one standard deviation)."""
+    ``estatistica_altura``. ``tipo``: line, markers, bar, hbar, line_sd, markers_sd, bar_sd or
+    hbar_sd (only the *_sd types draw one standard deviation)."""
     lang = ui._lang(lang)
     T = i18n.t
     cores = estilos["paleta"]
     chave = ["parcela"] + [c for c in ("especie", "classe") if c in est.columns]
-    horizontal = tipo == "hbar"
-    com_dp = tipo.endswith("_sd") or horizontal
+    horizontal = tipo in ("hbar", "hbar_sd")
+    com_dp = tipo.endswith("_sd")
     fig = go.Figure()
     for i, (k, sub) in enumerate(est.groupby(chave, sort=True)):
         sub = sub.sort_values("ano")
         k = k if isinstance(k, tuple) else (k,)
         partes = []
         for c, x in zip(chave, k):
-            partes.append(str(x) if c == "parcela" else nome_especie(x) if c == "especie"
+            partes.append(str(x) if c == "parcela" else nome_especie(x, lang) if c == "especie"
                           else T(f"colon.cls.{x}", lang))
         nome = " ".join(partes)
         cor = cores[i % len(cores)]
@@ -201,10 +205,10 @@ def fig_altura(est, estilos, lang=None, tipo="line_sd"):
         # the standard deviation is drawn upwards only (the bar goes from the mean to mean + SD)
         cima = lambda eixo: {eixo: dict(type="data", symmetric=False, array=dp, arrayminus=dp * 0,
                                         visible=True, thickness=1)}
-        if tipo in ("bar", "bar_sd", "hbar"):
+        if tipo in ("bar", "bar_sd", "hbar", "hbar_sd"):
             if horizontal:
                 fig.add_trace(go.Bar(x=sub["media"], y=sub["ano"], name=nome, marker_color=cor,
-                                     orientation="h", **cima("error_x")))
+                                     orientation="h", **(cima("error_x") if com_dp else {})))
             else:
                 fig.add_trace(go.Bar(x=sub["ano"], y=sub["media"], name=nome, marker_color=cor,
                                      **(cima("error_y") if tipo == "bar_sd" else {})))
@@ -374,7 +378,8 @@ def fig_idade(df, regs, estilos, lang=None, tipo="markers", log=False, curva=Fal
     lang = ui._lang(lang)
     T = i18n.t
     cores = estilos["paleta"]
-    d = df[(df["idade"] > 0) & (df["ind_ha"] > 0)].copy()
+    # zero density has no place on a log axis only: on a linear one it is a real point
+    d = df[(df["idade"] > 0) & ((df["ind_ha"] > 0) if log else df["ind_ha"].notna())].copy()
     horizontal = tipo == "hbar"
     ax_idade, ax_val = ("y", "x") if horizontal else ("x", "y")
     fig = go.Figure()
@@ -492,7 +497,7 @@ def nome_grupo(g, agrupar, lang=None):
     lang = ui._lang(lang)
     T = i18n.t
     return (T("colon.cohort.none", lang) if g == col.SEM_COORTE else
-            nome_especie(g) if agrupar == "especie" else
+            nome_especie(g, lang) if agrupar == "especie" else
             T(f"colon.cls.{g}", lang) if agrupar == "classe" else str(g))
 
 

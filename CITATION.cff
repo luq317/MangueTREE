@@ -3,8 +3,8 @@ message: "If you use this software, please cite it using the metadata below."
 title: "MangueTREE: structural and phytosociological analysis of mangrove forest plots"
 abstract: "Python engine and Streamlit app that computes forest structure, phytosociology (relative values and importance value), DBH classes and the Holdridge complexity index from stem-level field data of mangrove plots."
 type: software
-version: 1.3.0
-date-released: 2026-11-26
+version: 1.3.1
+date-released: 2026-11-27
 license: GPL-3.0-or-later
 repository-code: "https://github.com/luq317/MangueTREE"
 authors:

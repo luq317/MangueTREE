@@ -2,6 +2,12 @@
 
 **Header not found.** The sheet must have, within its first 25 rows, a row with tree identifier, species, DBH and condition. Compare with the data template.
 
+**Missing columns.** The message says which columns are missing and which names are accepted (for example `DAP`, `dbh_cm`, `Status` for the condition). For CSV or TXT, the app tries `;`, `,` and tab when the chosen delimiter does not split the columns.
+
+**No stem left for the calculation.** Every DBH is empty or invalid, or the condition codes are not recognised. The table below the message lists each problem. If the DBH is a formula, open the file in Excel and save it again.
+
+**Unit converted warning.** The header said mm, cm or ha and the app converted it. Check that the conversion is the one you expect.
+
 **Many unknown species.** Check the region in the sidebar or add the aliases you use to the species table.
 
 **Area warning.** The spreadsheet has no plot area. Write the label and value in the sheet header or give the area in the sidebar.

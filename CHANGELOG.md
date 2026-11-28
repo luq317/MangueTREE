@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-27
+
+### Fixed
+
+- Single plot page no longer shows a traceback when no stem is left for the calculation (all DBH empty or invalid, or condition codes not recognised); it explains why and lists the problems found.
+- Colonization page error when saving files (a local name hid the file-naming module).
+- The success message counts only the stems that go into the calculation.
+- A tree column left empty for every stem counts each live stem as one tree (it gave 0 trees). A tree number written only on the first stem still counts one tree.
+- A plot area with the unit both in the label and in the value (`Área (ha)` next to `0,01 ha`) is converted once.
+- The new warnings have their own names in the data check table (they showed the internal key).
+- Colonization: two workbooks of the same plot no longer stop the page; the second one is left out with a message.
+- Colonization: the count by cohort follows the chosen individuals (all, or only those with a cohort) and the option to hide incomplete years, so it gives the same numbers as the density table.
+- PDF of the single plot: DBH class labels lost a digit (`2,50 a 50`); they read `2,5 a 5`.
+- Template workbook: the plot is named after the file, not after the sheet `Dados`/`Data`; the instructions sheet is no longer picked by the single plot, multiple plots and temporal pages.
+- Template workbook: no warning for the tag shared by the stems of one tree, and no false stem-count warning when the tree number is written only on the first stem.
+- Area text with thousands marks (`1.000`, `1,000`) is read as 1000 m²; the label `Área amostrada` is recognised.
+- PDF texts, the summary panel and the English PDF write the chosen height unit (cm) and the English thousands mark.
+- File names: the temporal prefix carries the years once, long plot lists are not cut in the middle, the Tables export of multiple plots keeps every plot sheet, and two charts with the same title get different names.
+- Temporal and multiple plots: changing the height unit (m, cm) or the language while a parameter menu was on screen could empty it or stop the page (two-axis chart); the choice is now kept.
+- The year typed in the summary panel is cleared when another file or sheet is opened; multiple plots with a single plot add `_Multiple` to the file names, so they never take the names of the single plot page.
+- Results show two decimals everywhere in the PDFs and the summary panel (densities, areas and percentages appeared as `400` next to `433,33`); counts stay whole.
+
+### Changed
+
+- Colonization: the default is now **All (with and without a cohort)**, the version the NEMA uses; the other option leaves out individuals without a cohort and those whose cohort is after the year.
+- Colonization: nothing odd leaves the calculation. The Check tab lists, with row, column and tag, juveniles in a year before their cohort, unreadable cohorts, J heights that are zero, negative or above 600 cm and juveniles without species, for the spreadsheet to be fixed.
+- Colonization: blank species and `?` are one series, "No species"; the area used for each plot is shown, with a warning for a plot with no known area; the plot letter is also read from names such as `K.xlsx` or from the only one-letter sheet; reading errors, warnings and collection labels are translated.
+- Colonization: tables and exports have translated column names with units and file names of their own; the PDF records the settings (individuals, areas, joined plots), has the density table and a chart drawn without Chrome.
+- Colonization: the density tables follow the plot filter of the chart, the percentage table matches the percentage chart, the age chart keeps zero densities on a linear axis, horizontal height bars draw the standard deviation only when asked, and heights in metres show three decimals.
+- Temporal PDF names the plots and says when the values are the mean of several plots.
+- Every table of the PDF reports has a number and a caption ("Tabela 3. ..."), as the figures.
+- Colonization PDF: also the juvenile counts, the species composition in the last year of each plot, the mean juvenile height by year and plot, the check of each workbook and, without Chrome, a height chart.
+
+- Units written in a header are converted and reported: `DAP (mm)` to cm, `Altura (cm)` to m, `Área (ha)` to m².
+- The plot area is also read from text such as `100 m²`, from the cell two to the right of the label or right below it, and from the label `Área total`; an area of zero is reported instead of looking "not found".
+- Merged cells in the tree, species, condition and number-of-stems columns are filled down as Excel shows them, with a warning. DBH and height are never filled.
+- New warning for an unlikely plot area (below 10 m² or above 100,000 m²), the usual sign of a value in hectares with no unit.
+- DBH formulas without a stored result are reported with the way to fix them.
+- Sheets are read up to 20,000 data rows (it was 5,000, cut without notice); a warning appears when rows are left out.
+- Clearer messages for missing columns (which ones, and the accepted names), new accepted header names (`Nº`, `Status`, `Vivo/Morto`), CSV delimiter detected when the chosen one does not split the columns.
+- New warning when no live stem has a height (mean and canopy height show as 0).
+
 ## [1.3.0] - 2026-11-26
 
 ### Added
@@ -13,7 +55,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 
 - Documentation site with the MangueTREE look: app logo and favicon, the same green palette and font as the app (`docs/stylesheets/manguetree.css`).
-- Saved files now have organised names: `<plot>[_<year>]_<what>.<ext>`, with no accents or spaces (for example `H2_Height-and-profile.png`, `H2_Tables.xlsx`, `H2_Report.pdf`, `H2_Figures.zip`). This covers the camera button of every chart, the chart tables, the tables and PDF of each page, the summary panel and the ZIP of figures; several plots list the plots (`F2-H2-J2_...`) and the temporal analysis adds the years (`H2_2003-2025_...`).
+- Saved files now have organised names: `<plot>[_<year>]_<what>.<ext>`, with no accents or spaces (for example `H2_Summary-panel.png`, `H2_Tables.xlsx`, `H2_Report.pdf`, `H2_Figures.zip`). This covers the camera button of every chart, the chart tables, the tables and PDF of each page, the summary panel and the ZIP of figures; several plots list the plots (`F2-H2-J2_...`) and the temporal analysis adds the years (`H2_2003-2025_...`).
 
 ## [1.2.0] - 2026-11-24
 

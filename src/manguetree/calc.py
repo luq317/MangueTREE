@@ -220,7 +220,14 @@ def structural_summary(d, plot_area_m2, canopy_n=10):
     ba_total = ba_live + ba_dead
 
     # trees (not stems)
-    n_live_trees = live["tree_id"].nunique() if "tree_id" in live.columns else n_live
+    # A blank tree number usually means "same tree as the row above" (the number is written
+    # only on the first stem), so blank stems add no tree. Only when the column is blank for
+    # every live stem is each stem counted as one tree (else there would be 0 trees).
+    ids = live["tree_id"] if "tree_id" in live.columns else None
+    if ids is not None and ids.notna().any():
+        n_live_trees = ids.dropna().nunique()
+    else:
+        n_live_trees = n_live
 
     # Heights: LIVE stems with a recorded height only (the NEMA protocol records no
     # height for dead trees; Estrada et al. 2013). Canopy height = mean of the
@@ -263,7 +270,7 @@ def structural_summary(d, plot_area_m2, canopy_n=10):
 
 
 # ---------------------------------------------------------------------------
-# 4. IMPORTANCE VALUE (IVI) — Cintrón 1984, p.96-97
+# 4. IMPORTANCE VALUE (IVI): Cintrón 1984, p.96-97
 # ---------------------------------------------------------------------------
 def importance_value(d, plot_area_m2, unit_col=None):
     """
@@ -344,7 +351,7 @@ def pooled_importance(results):
 
 
 # ---------------------------------------------------------------------------
-# 5. DBH CLASSES — as in the lab spreadsheet (<2.5 / 2.5-10 / ≥10 cm)
+# 5. DBH CLASSES: as in the lab spreadsheet (<2.5 / 2.5-10 / ≥10 cm)
 # ---------------------------------------------------------------------------
 def dbh_classes(d, plot_area_m2, limits=(2.5, 10.0)):
     """
@@ -425,7 +432,7 @@ def diameter_distribution(d, plot_area_m2, class_width=5.0):
 
 
 # ---------------------------------------------------------------------------
-# 6. HOLDRIDGE COMPLEXITY INDEX — Pool, Snedaker & Lugo (1977)
+# 6. HOLDRIDGE COMPLEXITY INDEX: Pool, Snedaker & Lugo (1977)
 # ---------------------------------------------------------------------------
 def complexity_index(d, plot_area_m2, canopy_height_m, dbh_cut_cm):
     """

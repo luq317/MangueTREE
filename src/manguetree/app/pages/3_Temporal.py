@@ -101,7 +101,7 @@ for nome, abas in abas_por_arquivo.items():
     up = arquivos[nome]
     selecionadas[nome] = st.sidebar.multiselect(
         t("temporal.surveys_to_include") + (f" · {_plot_name(nome)}" if MULTI else ""),
-        options=abas, default=([a for a in abas if not _e_resumo(a)] or abas), key=f"sheets_temp_{up.name}_{up.size}")
+        options=abas, default=([a for a in abas if not _e_resumo(a) and not ui.is_help_sheet(a)] or abas), key=f"sheets_temp_{up.name}_{up.size}")
 
 # --- Ano de cada aba: detectado no nome; pede só o que falta, o resto fica num expansor ---
 anos_por_aba = {}
@@ -233,7 +233,7 @@ if ignoradas:
 PLOTS = list(dict.fromkeys(df_serie["plot"]))
 MULTI = len(PLOTS) > 1
 _anos_ = pd.to_numeric(df_serie["year"], errors="coerce").dropna().astype(int)
-nomes.definir(nomes.lista_parcelas(PLOTS, LANG),
+nomes.definir(nomes.lista_parcelas([nomes.sem_anos(p) for p in PLOTS], LANG),
               f"{_anos_.min()}-{_anos_.max()}" if len(_anos_) else "")    # file names: H2_2003-2025_...
 ui.batch_png_button(_slot_lote, _dpi_lote)
 
@@ -265,9 +265,8 @@ with tabs[0]:
     if modo == "separate":
         padrao = [p for p in ["mean_dbh_cm", "height_mean_m", "canopy_height_m",
                               "density_live_ha", "ba_live_ha"] if p in params]
-        escolhidos = st.multiselect(t("temporal.parameters"), params, default=padrao,
-                                    key="params_sep",
-                                    format_func=lambda c: ui.label(c, LANG))
+        escolhidos = ui.escolha_param(st, t("temporal.parameters"), params, "params_sep",
+                                      multi=True, default=padrao, lang=LANG)
         # one row: chart type, gaps, and the two menus that serve every chart below
         bar_ev = ui.barra(st)
         grafico = bar_ev.selectbox(t("temporal.chart"), ui.SERIES_CHARTS, key="graf_evol", width=270,
@@ -292,13 +291,11 @@ with tabs[0]:
         st.caption(t("temporal.dual_hint"))
         cE, cD = st.columns(2)
         with cE:
-            esq = st.multiselect(t("temporal.left_axis"), params,
-                                 default=[p for p in ["density_live_ha"] if p in params],
-                                 key="eixo_esq", format_func=lambda c: ui.label(c, LANG))
+            esq = ui.escolha_param(st, t("temporal.left_axis"), params, "eixo_esq", multi=True,
+                                   default=[p for p in ["density_live_ha"] if p in params], lang=LANG)
         with cD:
-            dire = st.multiselect(t("temporal.right_axis"), params,
-                                  default=[p for p in ["height_mean_m"] if p in params],
-                                  key="eixo_dir", format_func=lambda c: ui.label(c, LANG))
+            dire = ui.escolha_param(st, t("temporal.right_axis"), params, "eixo_dir", multi=True,
+                                    default=[p for p in ["height_mean_m"] if p in params], lang=LANG)
         base = serie_media if MULTI else df_serie
         if esq and dire:
             ui.show(st, ui.fig_temporal_multi(base, estilos, esq, dire, LANG), "3_2", estilos)
@@ -319,9 +316,8 @@ with tabs[1]:
         # menus and short checkboxes in the same row as Adjust and Chart table
         bar_e = ui.barra(st)
         opcoes_e = list(ui.LIVE_DEAD_METRICS) + list(mc.SPECIES_METRICS)
-        met_e = bar_e.selectbox(t("temporal.species_metric"), opcoes_e, width=230,
-                                index=opcoes_e.index("live_dead_ba"),
-                                key="met_esp_temp", format_func=lambda c: ui.label(c, LANG))
+        met_e = ui.escolha_param(bar_e, t("temporal.species_metric"), opcoes_e, "met_esp_temp",
+                                 index=opcoes_e.index("live_dead_ba"), lang=LANG, width=230)
         tipo = bar_e.selectbox(t("temporal.chart"), ("line", "bar", "stack", "stack100"), width=200,
                                index=2, key="tipo_esp_temp",
                                format_func=lambda k: t(f"temporal.chart.{k}"))
@@ -453,7 +449,7 @@ with tabs[5]:
     cc = st.columns(3)
     cc[0].markdown("**" + t("export.pdf_title") + "**")
     ui.pdf_block(cc[0], "temp", lambda figs: rep.temporal_report(
-        pdf_serie, pdf_esp, df_problemas, lang=LANG, seal=show_seal, figures=figs),
+        pdf_serie, pdf_esp, df_problemas, lang=LANG, seal=show_seal, figures=figs, plots=PLOTS),
         nomes.arquivo(t("file.temporal_pdf")) + ".pdf", sig)
     _tabs = {t("sheet.time_series"): ui.for_display(df_serie, lang=LANG)}
     if df_esp is not None and not df_esp.empty:

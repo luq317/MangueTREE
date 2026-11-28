@@ -210,6 +210,30 @@ def _lang(lang=None):
     return lang or i18n.get_lang()
 
 
+def escolha_param(container, label_, options, key, multi=False, default=None, index=0,
+                  lang=None, **kw):
+    """Selectbox (or, with ``multi``, multiselect) of parameter keys shown by their labels.
+
+    The labels carry the height unit and the language ("Mean height (m)"), and Streamlit keeps
+    a widget's choice by its label: after a change of unit or language the choice could be a
+    label no option has, which emptied the menu or stopped the page. So there is one widget per
+    unit and language, and each starts from the last choice made (kept by key, not label)."""
+    import streamlit as st
+    lang = _lang(lang)
+    options = list(options)
+    salvo = st.session_state.get(f"_escolha_{key}")
+    wkey = f"{key}__{altura_unidade()}_{lang}"
+    fmt = lambda c: label(c, lang)
+    if multi:
+        ini = [o for o in (salvo if salvo is not None else (default or [])) if o in options]
+        v = container.multiselect(label_, options, default=ini, key=wkey, format_func=fmt, **kw)
+    else:
+        ini = options.index(salvo) if salvo in options else index
+        v = container.selectbox(label_, options, index=ini, key=wkey, format_func=fmt, **kw)
+    st.session_state[f"_escolha_{key}"] = v
+    return v
+
+
 def label(col, lang=None, data_table=False):
     """Display label of an internal column name in ``lang`` (default: current)."""
     if data_table and col in _DATA_COLUMNS:
@@ -304,6 +328,28 @@ def format_by_dtype(df, decimals=2):
     """``Styler.format`` mapping: integer columns without decimals, others with ``decimals``."""
     return {c: ("{:d}" if pd.api.types.is_integer_dtype(df[c]) else f"{{:.{decimals}f}}")
             for c in df.columns if pd.api.types.is_numeric_dtype(df[c])}
+
+
+def _sheet_key(name):
+    import unicodedata
+    s = unicodedata.normalize("NFD", str(name).strip().lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def is_help_sheet(name):
+    """The instructions sheet of the template ("Instruções" / "Instructions"): never a plot."""
+    return _sheet_key(name) in {_sheet_key(i18n.t("template.sheet_help", lg)) for lg in ("pt", "en")}
+
+
+def is_generic_sheet(name):
+    """A sheet name that does not name a plot: the template's data sheet ("Dados" / "Data"),
+    a spreadsheet default ("Sheet1", "Planilha1") or a year (one survey per sheet)."""
+    import re
+    k = _sheet_key(name)
+    if k in {_sheet_key(i18n.t("template.sheet_data", lg)) for lg in ("pt", "en")}:
+        return True
+    return bool(re.fullmatch(r"(sheet|planilha|plan|folha|feuil|hoja)\s*\d*", k)
+                or re.fullmatch(r"(19|20)\d\d", k))
 
 
 def sheet_names(uploaded):
@@ -1142,16 +1188,21 @@ def to_excel_bytes(res, lang=None):
     return _exp.bytes_xlsx(tabelas_exportacao(res, lang), _lang(lang))
 
 
-def estilo2(df, lang=None, na_rep="-"):
+def estilo2(df, lang=None, na_rep="-", casas=None):
     """Styler that shows the float columns with two decimals (and the decimal and
-    thousands marks of the language); integer columns stay integers."""
+    thousands marks of the language); integer columns stay integers. ``casas`` gives other
+    decimals to some columns ({column: decimals}), e.g. heights in metres."""
     lang = _lang(lang)
     dec, mil = (",", ".") if str(lang).startswith("pt") else (".", ",")
     sty = df.style
-    fl = [c for c in df.columns if pd.api.types.is_float_dtype(df[c])]
+    casas = {c: n for c, n in (casas or {}).items() if c in df.columns}
+    fl = [c for c in df.columns if pd.api.types.is_float_dtype(df[c]) and c not in casas]
     if fl:
         sty = sty.format(subset=fl, precision=_exp.CASAS, decimal=dec, thousands=mil,
                          na_rep=na_rep)
+    for c, n in casas.items():
+        if pd.api.types.is_float_dtype(df[c]):
+            sty = sty.format(subset=[c], precision=n, decimal=dec, thousands=mil, na_rep=na_rep)
     return sty
 
 
@@ -1844,6 +1895,20 @@ def tabelas_grupo(container, key, figs, lang=None, nome=None):
                         tabelas={r: tabs[r] for r in esc}, lado_a_lado=False)
 
 
+def _nome_unico(base, key):
+    """File name of a chart: two charts with the same title (and so the same name) get
+    "-2", "-3"... The first chart to take a name keeps it for the whole session."""
+    import streamlit as st
+    try:
+        usados = st.session_state.setdefault("_nomes_graficos", {})
+    except Exception:                       # outside a Streamlit run
+        return base
+    nome, n = base, 2
+    while usados.setdefault(nome, key) != key:
+        nome, n = f"{base}-{n}", n + 1
+    return nome
+
+
 def show(container, fig, key, estilos=None, barra=None, comum=None, gid=None, botoes=True):
     """Draw ``fig`` with a small "Ajustar" menu above it (bar width, y limits, height of
     this chart only) and the "Tabela do gráfico" menu. The page-wide defaults come from
@@ -1925,7 +1990,7 @@ def show(container, fig, key, estilos=None, barra=None, comum=None, gid=None, bo
         fig.update_layout(yaxis_range=[lo, hi], yaxis_autorange=None)
     add_seal(fig)
     _register_fig(key, fig)
-    _base_nome = _nomes.arquivo(getattr(fig.layout.title, "text", None) or key)
+    _base_nome = _nome_unico(_nomes.arquivo(getattr(fig.layout.title, "text", None) or key), key)
     if barra is not None:
         tabela = _exp.tabela_da_figura(fig)
         if tabela is not None and not tabela.empty:
@@ -1943,11 +2008,15 @@ _ZIP_JS = r"""
 const CRC=(()=>{let t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
 function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
 function zip(files){const enc=new TextEncoder();let parts=[],central=[],off=0;
+ const now=new Date(),tm=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1),
+  dt=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
  for(const f of files){const name=enc.encode(f.name),d=f.data,crc=crc32(d);
   const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint32(14,crc,true);
+  h.setUint16(10,tm,true);h.setUint16(12,dt,true);
   h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,name.length,true);
   parts.push(new Uint8Array(h.buffer),name,d);
   const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);
+  c.setUint16(12,tm,true);c.setUint16(14,dt,true);
   c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,name.length,true);c.setUint32(42,off,true);
   central.push(new Uint8Array(c.buffer),name);off+=30+name.length+d.length}
  const size=central.reduce((s,a)=>s+a.length,0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);
@@ -1965,8 +2034,8 @@ document.getElementById('go').onclick=async()=>{const st=document.getElementById
  const plots=[...panel.querySelectorAll('.js-plotly-plot')].filter(g=>g.offsetParent!==null&&g._fullLayout);
  if(!plots.length){st.textContent=MSG_NONE;return}
  st.textContent=MSG_WORK;const files=[];let i=1;
- for(const gd of plots){let t=(gd._fullLayout.title&&gd._fullLayout.title.text)||('figura_'+i);
-  t=t.replace(/<[^>]+>/g,'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
+ for(const gd of plots){let t=(gd._fullLayout.title&&gd._fullLayout.title.text)||(FIGNAME+'-'+i);
+  t=t.replace(/<[^>]+>/g,'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60);
   files.push({name:(PREFIX?PREFIX+'_':'')+String(i).padStart(2,'0')+'_'+t+'.png',data:await png(gd,SCALE)});i++}
  const a=document.createElement('a');a.href=URL.createObjectURL(zip(files));a.download=ZIPNAME;document.body.appendChild(a);a.click();
  st.textContent=MSG_DONE.replace('{n}',files.length)};
@@ -1981,7 +2050,8 @@ def batch_png_button(container, dpi, zip_name=None):
     zip_name = zip_name or _nomes.arquivo(T("file.figures")) + ".zip"
     js = (_ZIP_JS.replace("PREFIX", json.dumps(_nomes.prefixo())).replace("SCALE", str(dpi / 96.0)).replace("ZIPNAME", json.dumps(zip_name))
           .replace("MSG_NONE", json.dumps(T("export.batch_none"))).replace("MSG_WORK", json.dumps(T("export.batch_work")))
-          .replace("MSG_DONE", json.dumps(T("export.batch_done"))))
+          .replace("MSG_DONE", json.dumps(T("export.batch_done")))
+          .replace("FIGNAME", json.dumps(T("export.batch_fig"))))
     html = (f'<body style="margin:0;font-family:Source Sans Pro,Arial,sans-serif">'
             f'<button id="go" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2E8B57;'
             f'background:#fff;color:#1F4D3A;font-weight:600;cursor:pointer">{T("export.batch_button")}</button>'

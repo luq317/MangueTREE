@@ -205,11 +205,11 @@ def test_report_check_is_grouped_by_category_errors_first():
     iss.append(Issue("unknown_species", "error", 999, 1, "last-error-marker", ""))
     frame = ui.issues_display_frame(iss, lang="pt")
     blocks = rep._bloco_verificacao(frame, "pt")
-    tab = next(c for t, c in blocks if t == "tab")
+    tab = next(b[1] for b in blocks if b[0] == "tab")      # ("tab", table, caption)
     assert len(tab) == 2                                   # one row per category, not 151
     assert tab.iloc[0]["Gravidade"] == "Erro"              # errors first
     assert int(tab["Ocorrências (N)"].sum()) == 151
-    cap = " ".join(c for t, c in blocks if t == "cap")
+    cap = " ".join(b[1] for b in blocks if b[0] == "cap")
     assert "1 erros" in cap and "150 avisos" in cap and "Problemas" in cap
 
 

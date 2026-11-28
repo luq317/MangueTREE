@@ -31,18 +31,33 @@ def slug(texto, max_len=60):
     return s[:max_len].strip("-")
 
 
+#: length of the plot part of a file name (``definir`` cuts every piece there)
+_MAX_PARTE = 40
+
+
+def sem_anos(nome):
+    """Plot name without the years it carries ("guaratiba_H2_2003_2025" -> "guaratiba_H2"):
+    the temporal page writes the years apart, so they would appear twice."""
+    s = re.sub(r"(?<![0-9])(19|20)\d{2}(?![0-9])", " ", str(nome))
+    s = re.sub(r"[\s_\-.]+", "_", s).strip("_")
+    return s or str(nome)
+
+
 def lista_parcelas(parcelas, lang="pt", maximo=4):
-    """"F2-H2-J2" for a few plots; "7-parcelas" / "7-plots" when the list would be long."""
+    """"F2-H2-J2" for a few plots; "7-parcelas" / "7-plots" when the list would be long (more
+    than ``maximo`` plots, or longer than a file-name piece: a cut list would drop plots)."""
     nomes = [slug(p, 20) for p in dict.fromkeys(map(str, parcelas)) if slug(p, 20)]
-    if len(nomes) <= maximo:
-        return "-".join(nomes)
+    junto = "-".join(nomes)
+    if len(nomes) <= maximo and len(junto) <= _MAX_PARTE:
+        return junto
     return f"{len(nomes)}-{'parcelas' if lang == 'pt' else 'plots'}"
 
 
 def definir(*partes):
     """Sets the prefix of this session (empty pieces are skipped)."""
     import streamlit as st
-    st.session_state[_KEY] = "_".join(p for p in (slug(x, 40) for x in partes if x not in (None, "")) if p)
+    st.session_state[_KEY] = "_".join(p for p in (slug(x, _MAX_PARTE) for x in partes
+                                                   if x not in (None, "")) if p)
 
 
 def prefixo():

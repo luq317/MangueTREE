@@ -66,6 +66,10 @@ def normalise_condition(value):
 class Limits:
     dbh_max_cm: float = 150.0
     height_max_m: float = 60.0
+    # plot area read from the file or typed by the user; outside this range it is most
+    # likely in another unit (0.01 = one are in hectares) or mistyped
+    area_min_m2: float = 10.0
+    area_max_m2: float = 100000.0
 
 
 def _catalog_key(prefix, kind, variant, lang):
@@ -176,8 +180,10 @@ def validate(df, resolver, limits=Limits(), missing_condition="exclude"):
         if not is_blank(raw_sp) or has_dbh:
             res = resolver.resolve(None if is_blank(raw_sp) else raw_sp)
             if res.status == "unknown":
-                add("unknown_species", "error", i,
-                    value="" if is_blank(raw_sp) else str(raw_sp).strip())
+                if is_blank(raw_sp):              # "species '' unknown" says nothing: say blank
+                    add("unknown_species", "error", i, variant="blank", value="")
+                else:
+                    add("unknown_species", "error", i, value=str(raw_sp).strip())
             elif res.status == "ambiguous":
                 add("ambiguous_species", "error", i, value=str(raw_sp).strip())
             species_codes[i] = res.code
@@ -201,9 +207,12 @@ def validate(df, resolver, limits=Limits(), missing_condition="exclude"):
         if counted_dead and pd.notna(h):
             add("dead_with_height", "warning", i, height=float(h))
 
-    # tree-level checks
+    # tree-level checks. A blank tree number means "same tree as the row above" (the number
+    # is written only on the first stem), as in calc.structural_summary.
+    key = tree.map(lambda v: None if is_blank(v) else v)
+    if key.notna().any():
+        key = key.ffill()
     if "tree_id" in df.columns:
-        key = tree.map(lambda v: None if is_blank(v) else v)
         nst = to_numeric(col("n_stems")) if "n_stems" in df.columns else None
         for t, idx in key.dropna().groupby(key.dropna()).groups.items():
             idx = list(idx)
@@ -225,6 +234,9 @@ def validate(df, resolver, limits=Limits(), missing_condition="exclude"):
     if "tag" in df.columns:
         tags = df["tag"].map(lambda v: None if is_blank(v) else str(v).strip())
         for tg, idx in tags.dropna().groupby(tags.dropna()).groups.items():
+            arvores = key.loc[list(idx)]
+            if len(idx) > 1 and arvores.notna().all() and arvores.nunique() == 1:
+                continue                          # one tag per tree: its stems share it
             if len(idx) > 1:
                 rows = ", ".join(str(row_of(i)) for i in idx)
                 for i in idx:
@@ -234,6 +246,37 @@ def validate(df, resolver, limits=Limits(), missing_condition="exclude"):
     if src is not None and unidecode(str(src)).lower().replace(".", "").strip() == "alt med":
         issues.append(Issue.make("ambiguous_height_column", "warning", None, None,
                                  {"source": str(src)}))
+    for conv in df.attrs.get("unit_conversions", []):
+        issues.append(Issue.make("unit_converted", "warning", None, None,
+                                 {"variant": conv["column"], "header": conv["header"],
+                                  "from_unit": conv["from_unit"], "to_unit": conv["to_unit"]}))
+    if df.attrs.get("area_converted_from"):
+        issues.append(Issue.make("unit_converted", "warning", None, None,
+                                 {"variant": "area", "from_unit": df.attrs["area_converted_from"],
+                                  "to_unit": "m²", "header": ""}))
+    if df.attrs.get("area_invalid_value") is not None:
+        issues.append(Issue.make("area_invalid", "warning", None, None,
+                                 {"value": f"{df.attrs['area_invalid_value']:g}"}))
+    if df.attrs.get("rows_truncated"):
+        issues.append(Issue.make("rows_truncated", "warning", None, None,
+                                 {"limit": int(df.attrs["rows_truncated"])}))
+    if df.attrs.get("merged_cells_filled"):
+        issues.append(Issue.make("merged_cells_filled", "warning", None, None,
+                                 {"n": int(df.attrs["merged_cells_filled"])}))
+    if df.attrs.get("formulas_without_value"):
+        issues.append(Issue.make("formulas_without_value", "error", None, None, {}))
+    live_rows = [i for i in df.index if pd.notna(dbh.loc[i]) and dbh.loc[i] > 0
+                 and normalise_condition(cond_col.loc[i]) == "live"]
+    if live_rows and not height.loc[live_rows].notna().any():
+        issues.append(Issue.make("no_heights", "warning", None, None, {}))
+    area_read = df.attrs.get("area_value")
+    if (df.attrs.get("area_source") in ("label", "cell", "user")
+            and isinstance(area_read, (int, float)) and not isinstance(area_read, bool)
+            and not (limits.area_min_m2 <= area_read <= limits.area_max_m2)):
+        low = area_read < limits.area_min_m2
+        issues.append(Issue.make("area_implausible", "warning", None, None,
+                                 {"variant": "low" if low else "high", "area": float(area_read),
+                                  "limit": float(limits.area_min_m2 if low else limits.area_max_m2)}))
     if df.attrs.get("area_source") == "fallback":
         area = df.attrs.get("area_value")
         params = ({"variant": "value", "area": float(area)}

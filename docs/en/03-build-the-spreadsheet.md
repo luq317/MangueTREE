@@ -44,14 +44,18 @@ Column names may be in Portuguese or English, with or without accents, in upper 
 
 - **Condition.** Live: `v`, `vivo`, `viva`, `live`. Dead: `m`, `morto`, `morta`, `dead`. A stem with DBH and no condition is an error; by default it is left out, and the app lets you count it as live or as dead.
 - **Species.** Write the scientific name, the code or a registered alias. `Av` is always *Avicennia schaueriana* (use `Ag` for *A. germinans*), `Lg` is *Laguncularia racemosa* and `Rh` is *Rhizophora mangle* in Southeast and South Brazil. Species the app does not recognise appear in the check and are not counted as species.
-- **Plot area.** Write the value in m² in the sheet, next to a label such as `Plot area` or `plot_area_m2`. If it is missing, the app uses the default area (100 m²) and **warns**, because the area scales every per-hectare value.
+- **Plot area.** Write the value in m² in the sheet, next to a label such as `Plot area`, `Sampled area` or `plot_area_m2` (`1,000` is read as one thousand m²). If it is missing, the app uses the default area (100 m²) and **warns**, because the area scales every per-hectare value.
 - **Numbers.** A decimal comma (`12,6`) is accepted. A blank cell is a missing value.
+- **Units.** When a header states the unit, the app converts and warns: `DBH (mm)` becomes cm, `Height (cm)` becomes metres and `Area (ha)` becomes m². With no unit written, cm, m and m² apply.
+- **Merged cells.** In the tree, species, condition and number-of-stems columns, the value of the first cell is repeated in the empty ones, as Excel shows it, and the app warns. DBH and height are never repeated: the height stays on the first stem only.
+- **Formulas.** If the DBH column holds formulas whose results were not stored (files made by a script), open the sheet in Excel and save it again.
+- **Size.** Each sheet is read up to 20,000 data rows; the app warns when there are more.
 
 ## Common mistakes
 
 - Forgetting the condition of some stems.
 - Mixing text into number columns (`12 cm`).
-- Missing plot area or area in the wrong unit.
+- Missing plot area, zero, or in the wrong unit (use m² or write `ha` in the label or the value). An area below 10 m² or above 100,000 m² is flagged.
 - The same tag on more than one row.
 
 See [Troubleshooting](10-troubleshooting.md) for what each warning means.

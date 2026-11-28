@@ -21,12 +21,15 @@ sao ignoradas.
 
 Regras (definidas em 20/11/2026, ver especificacao do modulo):
 
-* densidade de jovens = individuos com codigo J / area (ind/ha); cada individuo
-  conta uma vez;
+* densidade de jovens = linhas com codigo J / area (ind/ha): cada linha com J conta um
+  jovem (um individuo com dois lacres em J conta dois, como nas planilhas do NEMA), e um
+  lacre repetido em duas linhas conta duas vezes (decisao de 27/11/2026);
 * TR (tronco adicional) nao entra em ind/ha; entra na densidade de troncos;
 * N1 e N2 nao entram (situacao incerta); N3 = Y (morto); mortes: X, Y, N3, M;
 * E e a aba Excluidos ficam fora dos calculos;
-* duas versoes: sem indivíduos sem coorte e com eles;
+* duas versoes: todos os individuos (padrao da pagina, a usada pelo NEMA) ou so os com
+  coorte valida; nada sai do calculo por parecer errado: ``tabela_pendencias`` lista o
+  que corrigir na planilha;
 * parcelas unidas (A+B): somar contagens e areas.
 
 O leitor nao grava nada e nao altera a planilha.
@@ -140,6 +143,7 @@ class Individuo:
     lado: str
     lacres: list
     por_bloco: dict                      # indice do bloco -> dict(codigo, classe, altura, troncos_vivos)
+    lacre_por_linha: dict = field(default_factory=dict)   # numero da linha -> lacre
 
 
 @dataclass
@@ -150,7 +154,7 @@ class ParcelaLida:
     blocos: list
     individuos: list
     codigos: Counter
-    avisos: list                         # (tipo, mensagem, linha ou None)
+    avisos: list                         # (codigo, parametros, linha ou None): "colon.warn.<codigo>"
     excluidos: int = 0
     linhas_anotacao: list = field(default_factory=list)
     lacres_repetidos: list = field(default_factory=list)
@@ -227,9 +231,31 @@ def _nome_campo(v):
     return _sem_acento(_texto(v)).lower().replace(".", "").strip()
 
 
+class ErroLeitura(ValueError):
+    """Erro de leitura de uma planilha, com codigo e parametros: a pagina traduz com a chave
+    ``colon.err.<codigo>`` (a mensagem em portugues fica para quem usa o modulo direto)."""
+
+    def __init__(self, codigo, mensagem, **params):
+        super().__init__(mensagem)
+        self.codigo, self.params = codigo, params
+
+
 def _letra_da_planilha(nome_arquivo):
-    m = re.search(r"parcela\s+([A-Za-z]{1,2})\b", nome_arquivo, re.I)
+    """Letra da parcela no nome do arquivo: "Parcela K.xlsx", "Plot K.xlsx", "parcela_K.xlsx",
+    "K.xlsx" ou "K (1).xlsx"."""
+    base = re.sub(r"\.[A-Za-z0-9]+$", "", re.split(r"[\\/]", str(nome_arquivo))[-1]).strip()
+    m = re.search(r"(?:parcela|plot)[\s_-]*([A-Za-z]{1,2})(?![A-Za-z])", base, re.I)
+    if not m:
+        m = re.fullmatch(r"([A-Za-z]{1,2})(?:\s*\(\d+\))?", base)
     return m.group(1).upper() if m else None
+
+
+def _letra_pelas_abas(wb):
+    """Letra da parcela quando o nome do arquivo nao diz: a unica aba com nome de 1 ou 2
+    letras (a aba de digitacao)."""
+    letras = [ws.title.strip().upper() for ws in wb.worksheets
+              if re.fullmatch(r"[A-Za-z]{1,2}", ws.title.strip())]
+    return letras[0] if len(letras) == 1 else None
 
 
 def _aba(wb, *nomes):
@@ -281,7 +307,8 @@ def _acha_cabecalho(rows):
     for i, r in enumerate(rows[:12]):
         if any(_nome_campo(c) == "lacre" for c in r):
             return i
-    raise ValueError("Nao encontrei a linha de campos (com 'Lacre') nas primeiras linhas da aba.")
+    raise ErroLeitura("sem_cabecalho",
+                      "Não encontrei a linha de campos (com 'Lacre') nas primeiras linhas da aba.")
 
 
 def _colunas_fixas(campos):
@@ -384,19 +411,21 @@ def le_parcela(origem, parcela=None, anos_manuais=None, nome_arquivo=None, class
     """
     nome = nome_arquivo or (origem if isinstance(origem, str) else getattr(origem, "name", "planilha"))
     wb = openpyxl.load_workbook(origem, read_only=True, data_only=True)
-    parcela = (parcela or _letra_da_planilha(str(nome)) or "").upper()
+    parcela = (parcela or _letra_da_planilha(str(nome)) or _letra_pelas_abas(wb) or "").upper()
     if not parcela:
-        raise ValueError("Nao consegui saber a letra da parcela pelo nome do arquivo "
-                         "(use o formato 'Parcela K.xlsx').")
+        raise ErroLeitura("sem_letra", "Não consegui saber a letra da parcela pelo nome do arquivo "
+                          "nem pelas abas (use o formato 'Parcela K.xlsx').")
     ws = _aba(wb, parcela)
     if ws is None:
-        raise ValueError(f"Nao encontrei a aba '{parcela}' (aba de digitacao) em {nome}.")
+        raise ErroLeitura("sem_aba", f"Não encontrei a aba '{parcela}' (aba de digitação) em {nome}.",
+                          plot=parcela)
     rows = _linhas(ws)
     iref = _acha_cabecalho(rows)
     campos = rows[iref]
     fixos = _colunas_fixas(campos)
     if "lacre" not in fixos or "coorte" not in fixos:
-        raise ValueError("A aba nao tem as colunas Lacre e Coorte no cabecalho.")
+        raise ErroLeitura("sem_colunas", "A aba não tem as colunas Lacre e Coorte no cabeçalho.",
+                          plot=parcela)
     blocos = _monta_blocos(campos, rows[:iref])
     avisos = []
 
@@ -414,14 +443,15 @@ def le_parcela(origem, parcela=None, anos_manuais=None, nome_arquivo=None, class
         elif b.data is not None:
             b.ano, b.origem_ano = b.data.year, "data"
         else:
-            avisos.append(("bloco sem ano", f"{b.rotulo}: nao foi possivel definir o ano", None))
+            avisos.append(("bloco_sem_ano", {"bloco": b.rotulo}, None))
 
     vistos = {}
     for b in blocos:
         if b.ano is None:
             continue
         if b.ano in vistos:
-            avisos.append(("ano repetido", f"{b.rotulo} e {vistos[b.ano].rotulo} caem em {b.ano}; vale o ultimo", None))
+            avisos.append(("ano_repetido", {"a": b.rotulo, "b": vistos[b.ano].rotulo, "ano": b.ano},
+                           None))
         vistos[b.ano] = b
 
     # --- altura usada em cada bloco: ultima coluna de altura com algum numero
@@ -535,6 +565,7 @@ def _monta_individuo(parcela, grupo, linhas, fixos, blocos, avisos, classes_manu
         n_jovens = 0                        # linhas com J (um individuo pode ter 2 lacres em J)
         alturas_j = []                      # altura (cm) de cada linha com J (None se nao medida)
         alturas_cols = {j: [] for j in b.cols_altura}     # idem, por coluna de altura (coleta)
+        alturas_linhas = []                 # [(linha, {coluna: altura})] das linhas com J
         codigos_linhas = []
         for num, r in linhas:
             ultimo = ""
@@ -556,6 +587,7 @@ def _monta_individuo(parcela, grupo, linhas, fixos, blocos, avisos, classes_manu
                 alturas_j.append(alt)
                 for j in b.cols_altura:
                     alturas_cols[j].append(alts[j])
+                alturas_linhas.append((num, alts))
         if not codigos_linhas:
             continue
         # linha principal: a que nao e tronco; se houver varias, a de maior prioridade
@@ -569,9 +601,12 @@ def _monta_individuo(parcela, grupo, linhas, fixos, blocos, avisos, classes_manu
         por_bloco[b.indice] = {"codigo": melhor[0], "classe": melhor[1], "altura": melhor[2],
                                "linha": melhor[3], "troncos_vivos": troncos_vivos,
                                "n_jovens": n_jovens, "alturas_j": alturas_j,
-                               "alturas_cols": alturas_cols, "altura_cols": melhor[4]}
+                               "alturas_cols": alturas_cols, "altura_cols": melhor[4],
+                               "alturas_linhas": alturas_linhas}
+    lacre_por_linha = {n: cel(r, "lacre") for n, r in linhas if not _vazio(cel(r, "lacre"))}
     return Individuo(parcela=parcela, grupo=grupo, linhas=[n for n, _ in linhas], coorte=coorte,
-                     especie=especie, lado=lado, lacres=lacres, por_bloco=por_bloco)
+                     especie=especie, lado=lado, lacres=lacres, por_bloco=por_bloco,
+                     lacre_por_linha=lacre_por_linha)
 
 
 # --------------------------------------------------------------------------
@@ -591,6 +626,19 @@ ANOS_ESTABELECIMENTO = {"A": 1998, "B": 1998, "C": 1998, "D": 1998, "E": 1998, "
 
 AREAS_M2 = {"A": 25.0, "B": 25.0, "D": 60.0, "H": 60.0, "I": 60.0, "K": 60.0,
             "L": 60.0, "O": 60.0, "R": 60.0}
+#: area sugerida para uma parcela fora de AREAS_M2 (a pagina avisa: confira o valor)
+AREA_PADRAO_M2 = 60.0
+
+
+#: rotulo unico dos individuos sem especie (celula em branco ou "?")
+SEM_ESPECIE = "?"
+
+
+def especie_de(ind):
+    """Especie de um individuo como aparece nas tabelas ("Av", "Lg"...); em branco e "?"
+    viram SEM_ESPECIE."""
+    e = ind.especie.strip().capitalize()
+    return e if e and e != "?" else SEM_ESPECIE
 
 
 def _categoria_coorte(coorte, ano):
@@ -624,7 +672,7 @@ def tabela_individuos(parcela):
             linhas.append({"parcela": parcela.parcela, "grupo": ind.grupo, "linha": ind.linhas[0],
                            "ano": ano, "bloco": b.indice, "coorte": ind.coorte,
                            "categoria_coorte": _categoria_coorte(ind.coorte, ano),
-                           "especie": ind.especie.strip().capitalize(), "codigo": d["codigo"],
+                           "especie": especie_de(ind), "codigo": d["codigo"],
                            "classe": d["classe"], "altura": d["altura"],
                            "troncos_vivos": d["troncos_vivos"], "n_jovens": d["n_jovens"],
                            "alturas_j": d["alturas_j"]})
@@ -808,8 +856,7 @@ def resumo(parcela):
             "anotacoes": len(parcela.linhas_anotacao),
             "sem_coorte": sum(1 for i in parcela.individuos
                               if i.por_bloco and rotulo_coorte(i.coorte) == SEM_COORTE),
-            "especies": sorted({i.especie.strip().capitalize() for i in parcela.individuos
-                                if i.por_bloco and i.especie.strip()}),
+            "especies": sorted({especie_de(i) for i in parcela.individuos if i.por_bloco}),
             "codigos_desconhecidos": sorted(c for c in parcela.codigos
                                             if classifica(c, parcela.classes_manuais) == "desconhecido")}
 
@@ -868,6 +915,23 @@ ALTURA_1M_CM = 100.0
 #: como escolher, num ano com mais de uma coleta de altura, a que vale: "mais_dados" (a coleta
 #: com mais alturas medidas; em empate, a mais recente) ou "ultima" (a mais recente com altura)
 MODOS_ALTURA = ("mais_dados", "ultima")
+
+
+def traduz_rotulo(rotulo, lang=None):
+    """Rotulo de coleta ("Coleta 35", "Coletas 35 a 36", "bloco 2") no idioma da tela;
+    rotulos de ano ("2005", "<1998") ficam como estao."""
+    from manguetree.i18n import t
+    s = str(rotulo)
+    m = re.fullmatch(r"Coleta (\S+)", s)
+    if m:
+        return t("colon.label.collection", lang, n=m.group(1))
+    m = re.fullmatch(r"Coletas (\S+) a (\S+)", s)
+    if m:
+        return t("colon.label.collections", lang, a=m.group(1), b=m.group(2))
+    m = re.fullmatch(r"bloco (\d+)", s)
+    if m:
+        return t("colon.label.block", lang, n=m.group(1))
+    return s
 
 
 def _rotulo_coleta(bloco, j):
@@ -1268,20 +1332,25 @@ def monta_unidas(grupos, existentes):
     return out, sorted(set(repetidas))
 
 
-def contagem_por_ano(parcelas, selecao, por="classe", agrupar="coorte", unidas=None):
+def contagem_por_ano(parcelas, selecao, por="classe", agrupar="coorte", unidas=None,
+                     incluir_sem_coorte=True, ocultar_incompletas=False):
     """Individuos por ano, de uma selecao de classes ou de codigos, empilhados por um grupo.
 
     ``selecao`` e uma lista de classes (``por="classe"``: jovem, plantula, morto...) ou de
     codigos (``por="codigo"``: J, X, Y, M...); os itens escolhidos entram juntos na contagem.
     ``agrupar`` separa a contagem por "coorte", "especie", "codigo", "classe" ou "nenhum".
     Cada linha com J conta um jovem (como na densidade); as demais, um individuo.
-    Retorna parcela, ano, grupo, n; ``unidas`` junta parcelas."""
+    ``incluir_sem_coorte`` e ``ocultar_incompletas`` sao as mesmas escolhas da densidade
+    (False: so individuos com coorte valida). Retorna parcela, ano, grupo, n; ``unidas``
+    junta parcelas."""
     cols = ["parcela", "ano", "grupo", "n"]
     tabs = [tabela_individuos(p) for p in parcelas]
     tabs = pd.concat(tabs, ignore_index=True) if tabs else pd.DataFrame()
     if tabs.empty or not selecao:
         return pd.DataFrame(columns=cols)
     d = tabs[tabs["classe" if por == "classe" else "codigo"].isin(list(selecao))].copy()
+    if not incluir_sem_coorte:
+        d = d[d["categoria_coorte"] == "valida"]
     if d.empty:
         return pd.DataFrame(columns=cols)
     d["n"] = d["n_jovens"].where(d["classe"] == "jovem", 1)
@@ -1293,8 +1362,10 @@ def contagem_por_ano(parcelas, selecao, por="classe", agrupar="coorte", unidas=N
         d["grupo"] = ""
     for nome, membros in (unidas or {}).items():
         d.loc[d["parcela"].isin(membros), "parcela"] = nome
-    return d.groupby(["parcela", "ano", "grupo"], as_index=False)["n"].sum().astype(
-        {"n": int})[cols]
+    out = d.groupby(["parcela", "ano", "grupo"], as_index=False)["n"].sum().astype({"n": int})
+    if unidas and ocultar_incompletas:
+        out = marca_unidas(out, parcelas, unidas, ocultar_incompletas=True)
+    return out[cols].reset_index(drop=True)
 
 
 def tabela_codigos_por_ano(parcela):
@@ -1328,9 +1399,9 @@ def tabela_especies(parcela):
     """Por especie: individuos, os que foram jovens em algum ano e os sem coorte."""
     linhas = {}
     for i in parcela.individuos:
-        if not i.por_bloco or not i.especie.strip():
+        if not i.por_bloco:
             continue
-        r = linhas.setdefault(i.especie.strip().capitalize(),
+        r = linhas.setdefault(especie_de(i),
                               {"individuos": 0, "ja_jovens": 0, "sem_coorte": 0})
         r["individuos"] += 1
         r["ja_jovens"] += any(d["classe"] == "jovem" for d in i.por_bloco.values())
@@ -1342,9 +1413,12 @@ def tabela_especies(parcela):
 
 def tabela_alertas_altura(parcela, maximo_cm=600.0):
     """Por ano: linhas com J, as sem altura medida, a maior altura e as alturas suspeitas
-    (zero, negativas ou acima de ``maximo_cm``)."""
+    (zero, negativas ou acima de ``maximo_cm``, em qualquer coleta do ano; as mesmas de
+    ``tabela_pendencias``). As suspeitas continuam no calculo: a planilha e que se corrige."""
     t = tabela_individuos(parcela)
     t = t[t["classe"] == "jovem"]
+    pend = tabela_pendencias(parcela, maximo_cm)
+    susp = pend[pend["problema"] == "altura"].groupby("ano").size()
     linhas = []
     for ano, g in t.groupby("ano"):
         alturas = [h for lst in g["alturas_j"] for h in lst]
@@ -1352,7 +1426,7 @@ def tabela_alertas_altura(parcela, maximo_cm=600.0):
         linhas.append({"ano": ano, "linhas_j": len(alturas),
                        "sem_altura": len(alturas) - len(medidas),
                        "altura_maxima": max(medidas) if medidas else float("nan"),
-                       "suspeitas": sum(1 for h in medidas if h <= 0 or h > maximo_cm)})
+                       "suspeitas": int(susp.get(ano, 0))})
     return pd.DataFrame(linhas, columns=["ano", "linhas_j", "sem_altura", "altura_maxima",
                                          "suspeitas"])
 
@@ -1365,3 +1439,62 @@ def correlacao(x, y):
     if len(d) < 3 or d["x"].std() == 0 or d["y"].std() == 0:
         return None
     return float(d["x"].corr(d["y"]))
+
+
+def tabela_pendencias(parcela, maximo_cm=600.0):
+    """O que conferir e corrigir na planilha de digitacao, celula por celula.
+
+    Nada aqui sai do calculo: a lista so aponta onde esta o dado estranho. ``problema``:
+
+    * ``coorte_posterior``: jovem (J) num ano anterior a sua coorte (entra so na versao
+      com todos os individuos);
+    * ``coorte_invalida``: coorte que nao e ano, "<AAAA" nem "?" (ex. "20118"); o
+      individuo conta como sem coorte;
+    * ``altura``: altura de uma linha com J igual a zero, negativa ou acima de
+      ``maximo_cm`` (em qualquer coleta do ano);
+    * ``sem_especie``: individuo que foi jovem em algum ano e nao tem especie (celula em
+      branco ou "?"); entra nos graficos por especie como "sem especie".
+
+    Colunas: linha (da planilha), coluna (letra, so para altura), lacre, ano, problema,
+    valor.
+    """
+    cols = ["linha", "coluna", "lacre", "ano", "problema", "valor"]
+    anos = {b.indice: b.ano for b in parcela.blocos}
+    linhas = []
+
+    def lacre(ind, num=None):
+        v = ind.lacre_por_linha.get(num) if num is not None else None
+        v = v if v is not None else (ind.lacres[0] if ind.lacres else "")
+        return _texto(v) if v is not None else ""
+
+    for ind in parcela.individuos:
+        if not ind.por_bloco:
+            continue
+        num0 = ind.linhas[0]
+        if isinstance(ind.coorte, str) and not ind.coorte.startswith("<") \
+                and ind.coorte.strip() not in ("?", ""):
+            linhas.append({"linha": num0, "coluna": "", "lacre": lacre(ind, num0), "ano": None,
+                           "problema": "coorte_invalida", "valor": ind.coorte})
+        if isinstance(ind.coorte, int):
+            antes = sorted({anos[i] for i, d in ind.por_bloco.items()
+                            if d["classe"] == "jovem" and anos.get(i) is not None
+                            and anos[i] < ind.coorte})
+            for a in antes:
+                linhas.append({"linha": num0, "coluna": "", "lacre": lacre(ind, num0), "ano": a,
+                               "problema": "coorte_posterior", "valor": ind.coorte})
+        if especie_de(ind) == SEM_ESPECIE and any(d["classe"] == "jovem"
+                                                  for d in ind.por_bloco.values()):
+            linhas.append({"linha": num0, "coluna": "", "lacre": lacre(ind, num0), "ano": None,
+                           "problema": "sem_especie", "valor": ind.especie.strip()})
+        for i, d in sorted(ind.por_bloco.items()):
+            for num, alts in d.get("alturas_linhas", []):
+                for j, h in sorted(alts.items()):
+                    if h is not None and (h <= 0 or h > maximo_cm):
+                        linhas.append({"linha": num, "coluna": _letra_coluna(j),
+                                       "lacre": lacre(ind, num), "ano": anos.get(i),
+                                       "problema": "altura", "valor": h})
+    df = pd.DataFrame(linhas, columns=cols)
+    df["ano"] = df["ano"].astype("Int64")
+    ordem = {"coorte_posterior": 0, "coorte_invalida": 1, "altura": 2, "sem_especie": 3}
+    return df.sort_values(["problema", "linha", "ano"], key=lambda c: c.map(ordem)
+                          if c.name == "problema" else c).reset_index(drop=True)

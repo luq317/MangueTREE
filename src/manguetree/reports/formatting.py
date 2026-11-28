@@ -98,7 +98,7 @@ def group_issues(issues_df, lang="pt", examples=2, max_rows=8):
     n_warn = int((issues_df[sev] == ui.severity_label("warning", lang)).sum())
     rows = []
     for (k, s), g in issues_df.groupby([kind, sev], sort=False):
-        ex = [str(x) for x in g[det].astype(str) if x][:examples]
+        ex = list(dict.fromkeys(str(x) for x in g[det].astype(str) if x))[:examples]   # no repeats
         actions = [a for a in g[act].astype(str).unique() if a]
         rows.append({"_err": s != err_label, "_n": -len(g),
                      "cat": k, "sev": s, "n": len(g), "ex": "; ".join(ex),

@@ -49,7 +49,7 @@ Species that cannot be resolved are reported by the validation and are not count
 
 The plot area (m²) is looked for in this order:
 
-1. a number in the cell to the right of an area label in the header lines (`plot_area_m2`, `Plot area`, `Área`, `Área da parcela`, `Parcela (m2)`, and similar),
+1. a number in the cell to the right of an area label in the header lines (`plot_area_m2`, `Plot area`, `Área`, `Área da parcela`, `Área amostrada`, `Sampled area`, `Parcela (m2)`, and similar); a text value such as `1.000` or `1,000` is read as 1000 m²,
 2. a cell that you specify (for example `B4`),
 3. the default area you set in the app (100 m² if you do not change it).
 
@@ -82,6 +82,13 @@ The species and region table is provisional and awaits review by regional expert
 | `dead_with_height` | warning | Dead stem with a recorded height. | Height ignored. |
 | `ambiguous_height_column` | warning | Height read from a column named `alt med`, which may be observer eye height. | None. Check the column. |
 | `area_fallback` | warning | Plot area not found in the file. | Fallback area used. |
+| `unit_converted` | warning | A DBH, height or area header states a unit (`DAP (mm)`, `Altura (cm)`, `Área (ha)`). | Values converted to cm, m and m². |
+| `area_invalid` | warning | The area written in the sheet is zero or negative. | Fallback area used. |
+| `area_implausible` | warning | The plot area is below 10 m² or above 100,000 m² (often a value in hectares with no unit). | Area used as written. Check it. |
+| `rows_truncated` | warning | The sheet has more than 20,000 data rows. | Extra rows ignored. |
+| `merged_cells_filled` | warning | Merged cells in the tree, species, condition or number-of-stems columns. | The value of the first cell is repeated in the empty cells, as Excel shows it. DBH and height are never repeated. |
+| `formulas_without_value` | error | The DBH column holds formulas whose results are not stored in the file. | DBH read as empty. Open the sheet in Excel and save it again. |
+| `no_heights` | warning | No height recorded for any live stem. | Mean height, canopy height and the Holdridge index show as 0. |
 | `duplicate_year` | warning | Same year given to more than one sheet (temporal analysis). | Values averaged. |
 
 ## Example

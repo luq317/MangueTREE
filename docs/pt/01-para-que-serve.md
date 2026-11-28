@@ -27,4 +27,4 @@ O aplicativo roda no seu computador. Na versão para Windows e macOS, nenhum dad
 
 ## Como citar
 
-Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.3.0. https://github.com/luq317/MangueTREE. A página inicial do aplicativo e o [README](https://github.com/luq317/MangueTREE/blob/main/README.md) trazem a citação completa e o BibTeX. Os cálculos se baseiam em Cintrón e Schaeffer-Novelli, Pool et al. e Estrada et al. (2013, Aquatic Botany 111:135-143).
+Pereira LS, Motta LL, Matta TC, Chaves FO, Soares MLG (2026). MangueTREE v1.3.1. https://github.com/luq317/MangueTREE. A página inicial do aplicativo e o [README](https://github.com/luq317/MangueTREE/blob/main/README.md) trazem a citação completa e o BibTeX. Os cálculos se baseiam em Cintrón e Schaeffer-Novelli, Pool et al. e Estrada et al. (2013, Aquatic Botany 111:135-143).

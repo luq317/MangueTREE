@@ -56,7 +56,7 @@ def test_pdf_english_has_no_portuguese(pdf_en, tmp_path):
 
 def test_pdf_footer_citation(pdf_en, pdf_pt, tmp_path):
     en = _text(pdf_en, tmp_path)
-    assert "MangueTREE v1.3.0" in en and "Pereira LS et al. (2026)" in en
+    assert "MangueTREE v1.3.1" in en and "Pereira LS et al. (2026)" in en
     assert "github.com/luq317/MangueTREE" in en
     assert "linkedin" not in en.lower() and "@" not in en
     pt = _text(pdf_pt, tmp_path)

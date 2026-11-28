@@ -80,7 +80,8 @@ with st.sidebar.form("cfg_multi"):
         c1 = st.number_input(t("sidebar.dbh_class1"), value=2.5, step=0.5, key="cut1_multi")
     with cc2:
         c2 = st.number_input(t("sidebar.dbh_class2"), value=10.0, step=1.0, key="cut2_multi")
-    selecionadas = st.multiselect(t("multi.plots_to_analyse"), options=abas, default=abas,
+    selecionadas = st.multiselect(t("multi.plots_to_analyse"), options=abas,
+                                  default=[a for a in abas if not ui.is_help_sheet(a)] or abas,
                                   key=f"sheets_multi_{uploaded.name}_{uploaded.size}")
     submitted = st.form_submit_button(t("multi.run"), type="primary")
 limites = tuple(sorted([c1, c2]))
@@ -124,7 +125,10 @@ if not resultados:
     st.info(t("multi.select_prompt"))
     st.stop()
 resultados = ui.na_unidade(resultados)         # heights in the unit chosen in the sidebar
-nomes.definir(nomes.lista_parcelas([r_["plot_name"] for r_ in resultados], LANG))     # file names: F2-H2-J2_...
+# file names: F2-H2-J2_... ; one plot alone gets "_Multiplas" so its files never take the
+# names of the single plot page (same plot, different content)
+nomes.definir(nomes.lista_parcelas([r_["plot_name"] for r_ in resultados], LANG),
+              t("file.multi_one") if len(resultados) == 1 else "")
 ui.batch_png_button(_slot_lote, _dpi_lote)
 ignoradas = st.session_state.get("multi_ignoradas", {})
 
@@ -198,15 +202,14 @@ with tabs[0]:
     else:
         cf[1].selectbox(t("multi.chart_kind"), ("xy",), key="tipo_xy", disabled=True,
                         format_func=lambda k: t("multi.free.xy"))
-    metrica = cf[2].selectbox(t("multi.compare_by"), base_params,
-                              index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
-                              key="metrica_multi", format_func=lambda c: ui.label(c, LANG))
+    metrica = ui.escolha_param(cf[2], t("multi.compare_by"), base_params, "metrica_multi",
+                               index=base_params.index("mean_dbh_cm") if "mean_dbh_cm" in base_params else 0,
+                               lang=LANG)
     segunda = None
     if modo_f != "single":
         _c4 = cf[3] if len(cf) > 3 else st
-        segunda = _c4.selectbox(t("multi.second_param"), base_params,
-                                index=min(1, len(base_params) - 1), key="metrica_multi_b",
-                                format_func=lambda c: ui.label(c, LANG))
+        segunda = ui.escolha_param(_c4, t("multi.second_param"), base_params, "metrica_multi_b",
+                                   index=min(1, len(base_params) - 1), lang=LANG)
     ui.show(st, ui.fig_free_compare(df_param, estilos, modo_f, metrica, segunda, LANG,
                                         kind=tipo_f, resultados=resultados, second_style=estilo_2), "2_2", estilos)
     if modo_f == "single" and tipo_f in ("box", "violin"):
@@ -226,8 +229,8 @@ with tabs[1]:
     st.caption(t("multi.species_caption"))
     # menus and the values checkbox in the same row as Adjust and Chart table
     bar_m = ui.barra(st)
-    met_esp = bar_m.selectbox(t("single.metric"), ("ba_ha", "density_ha"), key="met_esp", width=200,
-                              format_func=lambda k: ui.label(k, LANG))
+    met_esp = ui.escolha_param(bar_m, t("single.metric"), ("ba_ha", "density_ha"), "met_esp",
+                               lang=LANG, width=200)
     cond_esp = bar_m.selectbox(t("labels.condition"), ("both", "live", "dead"), key="cond_esp",
                                width=170, format_func=lambda k: ui.condition_label(k, LANG))
     tipo_st = bar_m.selectbox(t("temporal.chart"), ("stack", "stack100"), key="tipo_st_multi",
@@ -320,9 +323,9 @@ with tabs[5]:
     _tabs = {t("sheet.comparison"): ui.for_display(df_param, lang=LANG)}
     if ivi_all is not None and not ivi_all.empty:
         _tabs[t("sheet.ivi")] = ui.for_display(ivi_all, lang=LANG)
-    for res in resultados:
-        nome = re.sub(r"[\\/*?:\[\]]", "", str(res["plot_name"]))[:26]
-        _tabs[(nome or "parc")[:26]] = ui.tabela_por_especie(res, LANG)
+    for res in resultados:           # one sheet per plot, none overwritten (see nome_unico)
+        _tabs[exportar.nome_unico(res["plot_name"], set(_tabs) | {t("sheet.issues")})] = \
+            ui.tabela_por_especie(res, LANG)
     _tabs[t("sheet.issues")] = df_problemas
     with cc[1]:
         exportar.botoes(st, None, nomes.arquivo(t("file.multi_xlsx")), "exp_multi_all", LANG,

@@ -44,14 +44,18 @@ Os nomes das colunas podem estar em português ou em inglês, com ou sem acento,
 
 - **Condição.** Vivo: `v`, `vivo`, `viva`, `live`. Morto: `m`, `morto`, `morta`, `dead`. Tronco com DAP e sem condição é um erro; por padrão ele fica de fora, e o aplicativo deixa você contá-lo como vivo ou como morto.
 - **Espécies.** Escreva o nome científico, o código ou um apelido cadastrado. `Av` é sempre *Avicennia schaueriana* (use `Ag` para *A. germinans*), `Lg` é *Laguncularia racemosa* e `Rh` é *Rhizophora mangle* no Sudeste e Sul do Brasil. Espécies que o aplicativo não reconhece aparecem na verificação e não entram na contagem de espécies.
-- **Área da parcela.** Escreva na folha, ao lado de um rótulo como `Área da parcela` ou `plot_area_m2`, o valor em m². Se não houver, o aplicativo usa a área padrão (100 m²) e **avisa**, porque a área multiplica todos os valores por hectare.
+- **Área da parcela.** Escreva na folha, ao lado de um rótulo como `Área da parcela`, `Área amostrada` ou `plot_area_m2`, o valor em m² (`1.000` é lido como mil m²). Se não houver, o aplicativo usa a área padrão (100 m²) e **avisa**, porque a área multiplica todos os valores por hectare.
 - **Números.** Vírgula decimal (`12,6`) é aceita. Célula em branco é valor ausente.
+- **Unidades.** Se o cabeçalho disser a unidade, o aplicativo converte e avisa: `DAP (mm)` vira cm, `Altura (cm)` vira metros e `Área (ha)` vira m². Sem unidade escrita, valem cm, m e m².
+- **Células mescladas.** Nas colunas de indivíduo, espécie, condição e número de troncos, o valor da primeira célula é repetido nas vazias, como o Excel mostra, e o aplicativo avisa. DAP e altura nunca são repetidos: a altura continua só no primeiro tronco.
+- **Fórmulas.** Se a coluna de DAP tiver fórmulas cujo resultado não foi gravado (arquivos feitos por script), abra a planilha no Excel e salve de novo.
+- **Tamanho.** Cada folha é lida até 20.000 linhas de dados; se passar disso o aplicativo avisa.
 
 ## Erros comuns
 
 - Esquecer a condição de alguns troncos.
 - Misturar texto em colunas de números (`12 cm`).
-- Área da parcela ausente ou em unidade errada.
+- Área da parcela ausente, zero ou em unidade errada (use m² ou escreva `ha` no rótulo ou no valor). Uma área abaixo de 10 m² ou acima de 100.000 m² gera aviso.
 - Mesma etiqueta em mais de uma linha.
 
 Veja [Problemas comuns](10-problemas.md) para o que cada aviso quer dizer.

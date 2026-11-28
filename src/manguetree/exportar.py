@@ -25,6 +25,7 @@ One place for every table the app saves, so all pages export the same way:
   can save its data the way it saves its picture.
 """
 import io
+import re
 import zipfile
 
 import numpy as np
@@ -125,6 +126,19 @@ def _nome_aba(nome, usados):
     return nome
 
 
+def nome_unico(nome, usados, maximo=26):
+    """Sheet name for a table: no characters Excel refuses, at most ``maximo`` characters and
+    different from every name in ``usados`` (case aside); a repeated one gets " (2)", " (3)"...
+    Two plots whose names start alike, or a plot named like a summary sheet, keep both sheets."""
+    base = re.sub(r"[\\/*?:\[\]]", "", str(nome))[:maximo] or "parc"
+    vistos = {str(u).lower() for u in usados}
+    out, n = base, 2
+    while out.lower() in vistos:
+        suf = f" ({n})"
+        out, n = base[:maximo - len(suf)] + suf, n + 1
+    return out
+
+
 def bytes_xlsx(tabelas, lang=None):
     """Organised Excel workbook. ``tabelas`` is a DataFrame or {sheet name: DataFrame}."""
     if not isinstance(tabelas, dict):
@@ -167,8 +181,15 @@ def bytes_zip(tabelas, formato, lang=None):
     usados = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for nome, df in tabelas.items():
-            arq = _nome_aba(nome, usados)
-            z.writestr(f"{arq}.{EXTENSAO[formato]}", bytes_tabela(df, formato, lang, arq))
+            # file names without accents or spaces (as every other file of the app), not cut
+            # to the 31 characters of an Excel sheet
+            from manguetree.nomes import slug
+            base = slug(nome, 60) or "Tabela"
+            arq, k = base, 2
+            while arq.lower() in usados:
+                arq, k = f"{base}-{k}", k + 1
+            usados.add(arq.lower())
+            z.writestr(f"{arq}.{EXTENSAO[formato]}", bytes_tabela(df, formato, lang, _nome_aba(nome, set())))
     return buf.getvalue()
 
 
@@ -222,6 +243,9 @@ def tabela_da_figura(fig):
         return None
     xt = _titulo_eixo(fig.layout.xaxis, "x")
     yt = _titulo_eixo(fig.layout.yaxis, "y")
+    T = i18n.t                                   # column names in the language of the screen
+    serie_t, grupo_t, valor_t, dp_t = (T("chart.table.series"), T("chart.table.group"),
+                                       T("chart.table.value"), T("chart.table.sd"))
     series, longos = [], []
     for tr in fig.data:
         tipo = getattr(tr, "type", "")
@@ -230,13 +254,13 @@ def tabela_da_figura(fig):
             vals = _lista(tr.y if tr.y is not None else tr.x)
             if vals:
                 grupos = _lista(tr.x) if tr.y is not None and tr.x is not None else [nome] * len(vals)
-                longos.append(pd.DataFrame({xt if tr.x is not None else "": grupos[:len(vals)],
+                longos.append(pd.DataFrame({xt if tr.x is not None else grupo_t: grupos[:len(vals)],
                                             yt: vals}))
             continue
         if tipo == "pie":
             if tr.values is not None:
-                series.append(("pie", pd.DataFrame({"": _lista(tr.labels),
-                                                    nome or "value": _lista(tr.values)})))
+                series.append(("pie", pd.DataFrame({grupo_t: _lista(tr.labels),
+                                                    nome or valor_t: _lista(tr.values)})))
             continue
         if tipo not in ("scatter", "scattergl", "bar"):
             continue
@@ -267,13 +291,13 @@ def tabela_da_figura(fig):
             sub = d.drop_duplicates("x").set_index("x")
             part = pd.DataFrame({col: sub["y"]})
             if "err" in sub:
-                part[f"{col} (SD)"] = sub["err"]
+                part[f"{col} ({dp_t})"] = sub["err"]
             out = part if out is None else out.join(part, how="outer")
         out = out.sort_index().rename_axis(xt).reset_index()
         return out
     longo = []
     for n, d in series:
-        d = d.rename(columns={"x": xt, "y": yt, "err": "SD"})
-        d.insert(0, "series", n)
+        d = d.rename(columns={"x": xt, "y": yt, "err": dp_t})
+        d.insert(0, serie_t, n)
         longo.append(d)
     return pd.concat(longo, ignore_index=True)

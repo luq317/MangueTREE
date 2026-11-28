@@ -216,7 +216,8 @@ def test_colonization_report_builds_in_both_languages(tmp_path):
                {"parcela": "B", "arquivo": "B.xlsx", "individuos": 50, "blocos": 3, "anos": (2000, 2010)}]
     dens = pd.DataFrame({"parcela": ["A", "B"], "ano": [2000, 2001], "ind_ha": [1000.0, 3000.0], "n": [5, 9]})
     pt = _text(report.colonization_report(resumos, dens, lang="pt"), tmp_path)
-    assert "Dinâmica de colonização" in pt and "2.000" in pt and "—" not in pt
+    # the KPI is the highest density (3.000), no longer the mean of every plot-year (2.000)
+    assert "Dinâmica de colonização" in pt and "3.000" in pt and "—" not in pt
     en = _text(report.colonization_report(resumos, dens, lang="en", figures=FIGS if HAS_PLOTLY_IMG else None), tmp_path)
     assert "Colonization dynamics" in en and "Resumo" not in en
 

@@ -140,11 +140,11 @@ def summary_panel(res, theme="light", lang=None, colors=None, fmt="png", dpi=200
     ax.set_ylim(-1, 1.2); ax.set_xlim(-hmax * 0.02, hmax)
     ax.set_yticks([]); [sp_.set_visible(False) for sp_ in ax.spines.values()]
     ax.tick_params(colors=th["muted"], labelsize=8, length=0); ax.set_facecolor(th["card"])
-    ax.set_xlabel("m", color=th["muted"], fontsize=8)
+    ax.set_xlabel(_un.altura_unidade(), color=th["muted"], fontsize=8)
 
     # 3. Live density with species shares
     r = [xs[2], 0.50, W, 0.355]; _card(fig, r, th)
-    _title(fig, r, th, T("labels.density_live_ha").split(" (")[0], _fmt(s["density_live_ha"], 0, lang),
+    _title(fig, r, th, T("labels.density_live_ha").split(" (")[0], _fmt(s["density_live_ha"], 2, lang),
            T("dashboard.stems_ha"), T("dashboard.share_species"))
     ax = fig.add_axes([r[0] + 0.02, r[1] + 0.12, r[2] - 0.04, 0.06])
     left = 0
@@ -153,8 +153,8 @@ def summary_panel(res, theme="light", lang=None, colors=None, fmt="png", dpi=200
         if sh <= 0:
             continue
         ax.barh(0, sh, left=left, color=colors.get(sp, "#888"), height=1, edgecolor=th["card"], linewidth=2)
-        if sh >= 7:
-            ax.text(left + 1.5, 0, f"{_fmt(sh, 0, lang)}%", va="center", fontsize=9.5, color="white",
+        if sh >= 12:                       # "45,00%" needs room inside the segment
+            ax.text(left + 1.5, 0, f"{_fmt(sh, 2, lang)}%", va="center", fontsize=9.5, color="white",
                     fontweight="bold")
         left += sh
     ax.set_xlim(0, 100); ax.axis("off")
@@ -184,7 +184,7 @@ def summary_panel(res, theme="light", lang=None, colors=None, fmt="png", dpi=200
                 mid = np.deg2rad((ang + a1) / 2)
                 ax.plot([1.02 * np.cos(mid), 1.15 * np.cos(mid)], [1.02 * np.sin(mid), 1.15 * np.sin(mid)],
                         color=th["muted"], lw=0.8)
-                ax.text(1.2 * np.cos(mid), 1.2 * np.sin(mid), f"{_fmt(100 * frac, 0, lang)}%",
+                ax.text(1.2 * np.cos(mid), 1.2 * np.sin(mid), f"{_fmt(100 * frac, 2, lang)}%",
                         ha="left" if np.cos(mid) >= 0 else "right", va="center", fontsize=9.5,
                         color=th["ink"], fontweight="bold")
             ang = a1
@@ -218,7 +218,7 @@ def summary_panel(res, theme="light", lang=None, colors=None, fmt="png", dpi=200
     lv = 100 - (s["mortality_ba_pct"] or 0)
     ax.barh(0, lv, color=th["ink"], height=1)
     ax.barh(0, 100 - lv, left=lv, color=th["card"], edgecolor=th["ink"], hatch="////", height=1)
-    ax.text(2, 0, f"{_fmt(lv, 0, lang)}%", va="center", color="white" if theme == "light" else th["bg"],
+    ax.text(2, 0, f"{_fmt(lv, 2, lang)}%", va="center", color="white" if theme == "light" else th["bg"],
             fontsize=9, fontweight="bold")
     ax.set_xlim(0, 100); ax.axis("off")
     fig.text(r[0] + 0.02, r[1] + 0.175, T("dashboard.ba_live_dead"), fontsize=8, color=th["muted"])
@@ -331,7 +331,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
         if sh <= 0:
             continue
         w = 330 * sh / 100
-        txt = f'<text x="{x0+8:.1f}" y="31" class="w">{F(sh, 0)}%</text>' if sh >= 8 else ""
+        txt = f'<text x="{x0+8:.1f}" y="31" class="w">{F(sh, 2)}%</text>' if sh >= 12 else ""
         seg += (f'<g class="tip" data-tip="{_esc(name(sp))}: {F(sh, 2)}% · {F(row(sp, "density_live_ha"), 2)} '
                 f'{_esc(T("dashboard.stems_ha"))}"><rect x="{x0:.1f}" y="10" width="{max(w-3, 1):.1f}" '
                 f'height="34" rx="6" fill="{colors.get(sp, "#888")}"/>{txt}</g>')
@@ -366,7 +366,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
                 anchor = "start" if np.cos(mid) >= 0 else "end"
                 lab = (f'<line x1="{cx+(R+4)*np.cos(mid):.1f}" y1="{cy+(R+4)*np.sin(mid):.1f}" x2="{lx:.1f}" '
                        f'y2="{ly:.1f}" stroke="{th["muted"]}"/><text x="{lx+(4 if anchor=="start" else -4):.1f}" '
-                       f'y="{ly+4:.1f}" class="n" style="text-anchor:{anchor}">{F(100*fr, 0)}%</text>')
+                       f'y="{ly+4:.1f}" class="n" style="text-anchor:{anchor}">{F(100*fr, 2)}%</text>')
             arcs += (f'<g class="tip" data-tip="{_esc(name(sp))} · {_esc(T("condition." + cond))}: {F(val, 2)} m²/ha '
                      f'({F(100*fr, 2)}%)"><path d="{p}" fill="{fill}" stroke="{colors.get(sp, "#888") if cond=="dead" else th["card"]}" '
                      f'stroke-width="1.5"/></g>{lab}')
@@ -388,7 +388,7 @@ def panel_html(res, theme="light", lang=None, colors=None, subtitle=""):
                  f'<line x1="0" y1="0" x2="0" y2="6" stroke="{th["ink"]}" stroke-width="3"/></pattern></defs>'
                  f'<g class="tip" data-tip="{_esc(T("condition.live"))}: {F(lv, 2)}%"><rect x="0" y="6" width="{330*lv/100:.1f}" height="28" rx="6" fill="{th["ink"] if theme == "light" else th["accent"]}"/></g>'
                  f'<g class="tip" data-tip="{_esc(T("condition.dead"))}: {F(100-lv, 2)}%"><rect x="{330*lv/100:.1f}" y="6" width="{330*(100-lv)/100:.1f}" height="28" rx="6" fill="url(#hm)" stroke="{th["ink"]}"/></g>'
-                 f'<text x="10" y="25" class="w">{F(lv, 0)}%</text></svg>'
+                 f'<text x="10" y="25" class="w">{F(lv, 2)}%</text></svg>'
                  f'<div class="s">{_esc(T("dashboard.ba_live_dead"))}</div><hr>'
                  f'<div class="k">{_esc(T("dashboard.holdridge"))}</div>'
                  f'<div class="v" style="font-size:26px">{F(cx_["dbh_gt_2.5"]["ci"], 2)}<small>{_esc(T("dashboard.dbh_gt", v=F(2.5, 1)))}</small></div>'
